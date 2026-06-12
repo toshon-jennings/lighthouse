@@ -365,6 +365,31 @@ code {
   font-size: 11px;
 }
 
+.kill-btn {
+  background: var(--red-dim);
+  border-color: var(--red);
+  color: var(--red);
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.kill-btn:hover {
+  background: var(--red);
+  color: #000;
+}
+
+.no-pid {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.process-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .fix-btn {
   background: var(--green-dim);
   border-color: var(--green);

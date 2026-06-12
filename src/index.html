@@ -379,17 +379,24 @@ function renderConflicts(conflicts) {
       </div>
       <p class="conflict-desc">${c.explanation}</p>
       <div class="conflict-processes">
-        <span class="process">${c.process_a}</span>
+        <div class="process-wrap">
+          <span class="process">${c.process_a}</span>
+          ${c.pid_a ? `<button class="kill-btn" onclick="killProcess(${c.pid_a}, '${String(c.process_a).replace(/'/g, "\\'")}')" title="Kill PID ${c.pid_a}">Kill</button>` : '<span class="no-pid">no PID</span>'}
+        </div>
         <span class="vs">vs</span>
-        <span class="process">${c.process_b}</span>
+        <div class="process-wrap">
+          <span class="process">${c.process_b}</span>
+          ${c.pid_b ? `<button class="kill-btn" onclick="killProcess(${c.pid_b}, '${String(c.process_b).replace(/'/g, "\\'")}')" title="Kill PID ${c.pid_b}">Kill</button>` : '<span class="no-pid">no PID</span>'}
+        </div>
       </div>
       ${c.suggestion ? `
         <button class="fix-btn" onclick="applyQuickFix(${c.port}, ${c.suggestion})">
-          Fix: Use port ${c.suggestion}
+          Suggest port ${c.suggestion}
         </button>
       ` : ''}
     </div>
   `).join('');
+}
 }
 
 function renderPortmasterFiles(files) {
@@ -438,6 +445,17 @@ async function suggestPort() {
       <strong>Next free port (3000-3999): ${result}</strong>
     </div>
   `;
+}
+
+async function killProcess(pid, name) {
+  if (!confirm(`Kill ${name} (PID ${pid})? This will forcefully terminate the process.`)) return;
+  try {
+    const result = await invoke('kill_process', { pid });
+    alert(result);
+    scan(); // Re-scan after kill
+  } catch (err) {
+    alert(`Failed to kill PID ${pid}: ${err}`);
+  }
 }
 
 async function applyQuickFix(oldPort, newPort) {

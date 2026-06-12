@@ -19,6 +19,8 @@ pub fn detect_conflicts(
                     bind_b: port_b.bind_address.clone(),
                     process_a: port_a.process_name.clone(),
                     process_b: port_b.process_name.clone(),
+                    pid_a: port_a.pid,
+                    pid_b: port_b.pid,
                     suggestion,
                     explanation: format!(
                         "Both '{}' and '{}' are listening on port {}",
@@ -43,6 +45,8 @@ pub fn detect_conflicts(
                     bind_b: "0.0.0.0".to_string(),
                     process_a: lp.process_name.clone(),
                     process_b: format!("{} (config)", pp.project_name),
+                    pid_a: lp.pid,
+                    pid_b: None,
                     suggestion,
                     explanation: format!(
                         "Project '{}' wants port {} but '{}' is already using it",
@@ -64,6 +68,8 @@ pub fn detect_conflicts(
                     bind_b: "configured".to_string(),
                     process_a: pp_a.project_name.clone(),
                     process_b: pp_b.project_name.clone(),
+                    pid_a: None,
+                    pid_b: None,
                     suggestion,
                     explanation: format!(
                         "Both '{}' and '{}' are configured to use port {}",

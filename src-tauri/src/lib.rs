@@ -38,6 +38,8 @@ pub struct Conflict {
     pub bind_b: String,
     pub process_a: String,
     pub process_b: String,
+    pub pid_a: Option<u32>,
+    pub pid_b: Option<u32>,
     pub suggestion: Option<u16>,
     pub explanation: String,
 }
@@ -173,6 +175,28 @@ async fn get_portmaster_files() -> Result<Vec<String>, String> {
 }
 
 #[tauri::command]
+async fn kill_process(pid: u32) -> Result<String, String> {
+    #[cfg(unix)]
+    {
+        use std::process::Command;
+        let output = Command::new("kill")
+            .args(["-9", &pid.to_string()])
+            .output()
+            .map_err(|e| format!("Failed to kill PID {}: {}", pid, e))?;
+        if output.status.success() {
+            Ok(format!("Killed process {}", pid))
+        } else {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            Err(format!("Failed to kill PID {}: {}", pid, stderr))
+        }
+    }
+    #[cfg(not(unix))]
+    {
+        Err("Process killing is only supported on Unix systems".to_string())
+    }
+}
+
+#[tauri::command]
 async fn open_config_file(file_path: String) -> Result<(), String> {
     #[cfg(target_os = "macos")]
     std::process::Command::new("open")
@@ -209,6 +233,7 @@ pub fn run() {
             preview_fix,
             apply_fix,
             get_portmaster_files,
+            kill_process,
             open_config_file,
         ])
         .setup(|app| {
