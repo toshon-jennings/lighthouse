@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.1">
+<title>Lighthouse</title>
+<link rel="stylesheet" href="styles/main.css">
+</head>
+<body>
+<div id="app">
+  <header>
+    <div class="logo-wrap">
+      <div class="logo">
+        <img class="logo-image" src="assets/lh-logo.png" alt="Lighthouse logo">
+        <div class="logo-copy">
+          <h1>Lighthouse</h1>
+          <p class="logo-subtitle">Port awareness for local development</p>
+        </div>
+      </div>
+    </div>
+    <div class="status-bar">
+      <span id="status-dot" class="dot ok"></span>
+      <span id="status-text">Ready</span>
+      <span class="spacer"></span>
+      <span id="last-scan">Never scanned</span>
+      <button id="guide-btn" class="secondary-btn" onclick="openGuide()">Guide</button>
+      <button id="scan-btn" onclick="scan()">⟳ Scan</button>
+    </div>
+  </header>
+
+  <main>
+    <section id="conflicts-section" class="section hidden">
+      <h2>⚠ Conflicts Detected</h2>
+      <div id="conflicts-list"></div>
+    </section>
+
+    <section id="ports-section" class="section">
+      <div class="section-header">
+        <div>
+          <h2>Active Ports</h2>
+          <p class="section-subtitle">Sort by clicking any column header. Service and Managed By sort alphabetically.</p>
+        </div>
+        <div class="filters">
+          <button class="filter active" onclick="filterPorts(event, 'all')">All</button>
+          <button class="filter" onclick="filterPorts(event, 'live')">Live</button>
+          <button class="filter" onclick="filterPorts(event, 'portmaster')">Portmaster</button>
+          <button class="filter" onclick="filterPorts(event, 'docker')">Docker</button>
+          <button class="filter" onclick="filterPorts(event, 'config')">Config</button>
+        </div>
+      </div>
+      <div id="ports-table-wrap">
+        <table id="ports-table">
+          <thead>
+            <tr>
+              <th><button class="th-btn active" data-key="port" onclick="setSort('port')">Port <span id="sort-port" class="sort-indicator">↓</span></button></th>
+              <th><button class="th-btn" data-key="bind_address" onclick="setSort('bind_address')">Bind <span id="sort-bind_address" class="sort-indicator hidden-inline">↕</span></button></th>
+              <th><button class="th-btn" data-key="service" onclick="setSort('service')">Service <span id="sort-service" class="sort-indicator hidden-inline">↕</span></button></th>
+              <th><button class="th-btn" data-key="process_name" onclick="setSort('process_name')">Process <span id="sort-process_name" class="sort-indicator hidden-inline">↕</span></button></th>
+              <th><button class="th-btn" data-key="source" onclick="setSort('source')">Source <span id="sort-source" class="sort-indicator hidden-inline">↕</span></button></th>
+              <th><button class="th-btn" data-key="managed_by" onclick="setSort('managed_by')">Managed By <span id="sort-managed_by" class="sort-indicator hidden-inline">↕</span></button></th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="ports-body">
+            <tr class="empty-state">
+              <td colspan="7">Click "Scan" to discover ports</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="portmaster-section" class="section">
+      <h2>PORTMASTER.md Files</h2>
+      <div id="portmaster-files"></div>
+    </section>
+
+    <section id="check-section" class="section">
+      <h2>Quick Check</h2>
+      <div class="check-form">
+        <input type="number" id="check-port-input" placeholder="Port number (e.g. 3000)" min="1" max="65535">
+        <button onclick="checkPort()">Check</button>
+        <button onclick="suggestPort()">Suggest Free</button>
+      </div>
+      <div id="check-result"></div>
+    </section>
+  </main>
+</div>
+
+<div id="guide-modal" class="modal hidden" aria-hidden="true">
+  <div class="modal-backdrop" onclick="closeGuide()"></div>
+  <div class="modal-dialog" role="dialog" aria-modal="true" aria-labelledby="guide-title" aria-describedby="guide-body">
+    <div class="modal-header">
+      <div>
+        <h2 id="guide-title">Lighthouse User Guide</h2>
+        <p class="modal-subtitle">Track port usage, find conflicts, and understand who owns what.</p>
+      </div>
+      <button id="guide-close-btn" class="icon-btn" onclick="closeGuide()" aria-label="Close user guide">✕</button>
+    </div>
+    <div id="guide-body" class="modal-body">
+      <section class="guide-section">
+        <h3>What Lighthouse does</h3>
+        <ul>
+          <li>Scans live listening ports on your machine</li>
+          <li>Finds PORTMASTER.md files across agent rules and repositories</li>
+          <li>Helps you spot port conflicts quickly</li>
+          <li>Suggests nearby free ports when a port is already in use</li>
+        </ul>
+      </section>
+
+      <section class="guide-section">
+        <h3>How to use the main table</h3>
+        <ul>
+          <li>Click Scan to refresh the live machine state</li>
+          <li>Use the filter buttons to narrow results by source</li>
+          <li>Click any column header to sort ascending or descending</li>
+          <li>Service and Managed By are especially useful for alphabetical review</li>
+        </ul>
+      </section>
+
+      <section class="guide-section">
+        <h3>What the columns mean</h3>
+        <ul>
+          <li><strong>Port</strong>: the listening port number</li>
+          <li><strong>Bind</strong>: where the service is listening, such as 127.0.0.1 or 0.0.0.0</li>
+          <li><strong>Service</strong>: known service or project name when available</li>
+          <li><strong>Process</strong>: live process name currently listening</li>
+          <li><strong>Source</strong>: whether the row came from a live scan, Docker, PORTMASTER, or project config</li>
+          <li><strong>Managed By</strong>: the owning runtime, app, or tool when known</li>
+        </ul>
+      </section>
+
+      <section class="guide-section">
+        <h3>Quick Check</h3>
+        <ul>
+          <li>Enter a port number to see if it is currently in use</li>
+          <li>Use Suggest Free to find the next available port in the app-server range</li>
+        </ul>
+      </section>
+
+      <section class="guide-section">
+        <h3>Conflict workflow</h3>
+        <ol>
+          <li>Scan the machine</li>
+          <li>Open the Conflicts section if warnings appear</li>
+          <li>Review the affected processes and suggested replacement port</li>
+          <li>Open the related config or PORTMASTER entry and update intentionally</li>
+        </ol>
+      </section>
+
+      <section class="guide-section">
+        <h3>Keyboard shortcuts</h3>
+        <ul>
+          <li><strong>Escape</strong>: close the guide modal</li>
+          <li><strong>Enter</strong> on Guide or Scan buttons: activate them</li>
+        </ul>
+      </section>
+    </div>
+  </div>
+</div>
+
+<script>
+const { invoke } = __TAURI__['core'];
+const { listen } = __TAURI__['event'];
+
+let currentFilter = 'all';
+let appState = null;
+let sortState = { key: 'port', direction: 'asc' };
+let previousFocus = null;
+
+listen('conflict-detected', (event) => {
+  const data = event.payload;
+  showNotification(`Port Conflict on ${data.port}`, data.explanation);
+  scan();
+});
+
+function showNotification(title, body) {
+  if (window.Notification && Notification.permission === 'granted') {
+    new Notification(title, { body });
+  }
+}
+
+if (window.Notification && Notification.permission === 'default') {
+  Notification.requestPermission();
+}
+
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape') {
+    closeGuide();
+  }
+});
+
+function normalizeValue(value) {
+  if (value === null || value === undefined) return '';
+  return String(value).trim().toLowerCase();
+}
+
+function getSortValue(port) {
+  switch (sortState.key) {
+    case 'port':
+      return Number(port.port || 0);
+    case 'bind_address':
+      return normalizeValue(port.bind_address);
+    case 'service':
+      return normalizeValue(port.service_name || port.project || '');
+    case 'process_name':
+      return normalizeValue(port.process_name || '');
+    case 'source':
+      return normalizeValue(port.source || '');
+    case 'managed_by':
+      return normalizeValue(port.managed_by || '');
+    default:
+      return normalizeValue(port.port);
+  }
+}
+
+function sortPorts(ports) {
+  const cloned = [...ports];
+  cloned.sort((a, b) => {
+    const aValue = getSortValue(a);
+    const bValue = getSortValue(b);
+    let comparison = 0;
+
+    if (typeof aValue === 'number' && typeof bValue === 'number') {
+      comparison = aValue - bValue;
+    } else {
+      comparison = String(aValue).localeCompare(String(bValue), undefined, { sensitivity: 'base' });
+    }
+
+    if (comparison === 0) {
+      comparison = Number(a.port || 0) - Number(b.port || 0);
+    }
+
+    return sortState.direction === 'asc' ? comparison : -comparison;
+  });
+  return cloned;
+}
+
+function updateSortIndicators() {
+  document.querySelectorAll('.th-btn').forEach(btn => btn.classList.remove('active'));
+  document.querySelectorAll('.sort-indicator').forEach(indicator => {
+    indicator.classList.add('hidden-inline');
+    indicator.textContent = '↕';
+  });
+
+  const activeBtn = document.querySelector(`.th-btn[data-key="${sortState.key}"]`);
+  const activeIndicator = document.getElementById(`sort-${sortState.key}`);
+  if (activeBtn) activeBtn.classList.add('active');
+  if (activeIndicator) {
+    activeIndicator.classList.remove('hidden-inline');
+    activeIndicator.textContent = sortState.direction === 'asc' ? '↑' : '↓';
+  }
+}
+
+function setSort(key) {
+  if (sortState.key === key) {
+    sortState.direction = sortState.direction === 'asc' ? 'desc' : 'asc';
+  } else {
+    sortState.key = key;
+    sortState.direction = key === 'port' ? 'asc' : 'asc';
+  }
+  updateSortIndicators();
+  if (appState) renderPorts(appState.ports);
+}
+
+async function scan() {
+  const btn = document.getElementById('scan-btn');
+  btn.disabled = true;
+  btn.textContent = 'Scanning...';
+  document.getElementById('status-text').textContent = 'Scanning...';
+
+  try {
+    appState = await invoke('scan_ports');
+    renderPorts(appState.ports);
+    renderConflicts(appState.conflicts);
+    document.getElementById('last-scan').textContent = `Last scan: ${appState.last_scan}`;
+    document.getElementById('status-text').textContent =
+      appState.conflicts.length > 0
+        ? `${appState.conflicts.length} conflict(s)`
+        : 'All clear';
+    document.getElementById('status-dot').className = `dot ${appState.status}`;
+
+    const pmFiles = await invoke('get_portmaster_files');
+    renderPortmasterFiles(pmFiles);
+  } catch (err) {
+    document.getElementById('status-text').textContent = `Error: ${err}`;
+    document.getElementById('status-dot').className = 'dot error';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '⟳ Scan';
+  }
+}
+
+function renderPorts(ports) {
+  const tbody = document.getElementById('ports-body');
+  const filtered = filterPortsList(ports);
+  const sorted = sortPorts(filtered);
+
+  if (sorted.length === 0) {
+    tbody.innerHTML = '<tr class="empty-state"><td colspan="7">No ports found</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = sorted.map(p => `
+    <tr class="${String(p.source || '').toLowerCase()} ${isConflictPort(p.port) ? 'conflict' : ''}">
+      <td class="port-number">${p.port}</td>
+      <td><code>${p.bind_address || '-'}</code></td>
+      <td>${p.service_name || p.project || '-'}</td>
+      <td>${p.process_name || '-'}</td>
+      <td><span class="badge ${String(p.source || '').toLowerCase()}">${sourceLabel(p.source)}</span></td>
+      <td>${p.managed_by || '-'}</td>
+      <td>
+        <button class="action-btn" onclick="checkPort(${p.port})" title="Check this port">?</button>
+        ${p.project ? `<button class="action-btn" onclick="openProject('${String(p.project).replace(/'/g, "\\'")}')" title="Open project">📁</button>` : ''}
+      </td>
+    </tr>
+  `).join('');
+}
+
+function filterPortsList(ports) {
+  if (currentFilter === 'all') return ports;
+  return ports.filter(p => {
+    switch (currentFilter) {
+      case 'live': return p.source === 'Live';
+      case 'portmaster': return p.source === 'Portmaster';
+      case 'docker': return p.source === 'Docker';
+      case 'config': return p.source === 'ProjectConfig';
+      default: return true;
+    }
+  });
+}
+
+function sourceLabel(source) {
+  const labels = {
+    'Live': '● Live',
+    'Portmaster': '📋 Portmaster',
+    'Docker': '🐳 Docker',
+    'ProjectConfig': '⚙ Config',
+  };
+  return labels[source] || source || 'Unknown';
+}
+
+function isConflictPort(port) {
+  return appState && appState.conflicts && appState.conflicts.some(c => c.port === port);
+}
+
+function filterPorts(evt, filter) {
+  currentFilter = filter;
+  document.querySelectorAll('.filter').forEach(f => f.classList.remove('active'));
+  if (evt && evt.target) evt.target.classList.add('active');
+  if (appState) renderPorts(appState.ports);
+}
+
+async function openProject(projectName) {
+  const container = document.getElementById('check-result');
+  container.innerHTML = `
+    <div class="check-result ok">
+      <strong>Project:</strong> ${projectName}<br>
+      <span class="muted">Project-open integration is the next step; scan data already knows which project claimed the port.</span>
+    </div>
+  `;
+}
+
+function renderConflicts(conflicts) {
+  const section = document.getElementById('conflicts-section');
+  const list = document.getElementById('conflicts-list');
+
+  if (conflicts.length === 0) {
+    section.classList.add('hidden');
+    return;
+  }
+
+  section.classList.remove('hidden');
+  list.innerHTML = conflicts.map(c => `
+    <div class="conflict-card">
+      <div class="conflict-header">
+        <span class="conflict-port">Port ${c.port}</span>
+        ${c.suggestion ? `<span class="suggestion">Try port ${c.suggestion}</span>` : ''}
+      </div>
+      <p class="conflict-desc">${c.explanation}</p>
+      <div class="conflict-processes">
+        <span class="process">${c.process_a}</span>
+        <span class="vs">vs</span>
+        <span class="process">${c.process_b}</span>
+      </div>
+      ${c.suggestion ? `
+        <button class="fix-btn" onclick="applyQuickFix(${c.port}, ${c.suggestion})">
+          Fix: Use port ${c.suggestion}
+        </button>
+      ` : ''}
+    </div>
+  `).join('');
+}
+
+function renderPortmasterFiles(files) {
+  const container = document.getElementById('portmaster-files');
+  if (files.length === 0) {
+    container.innerHTML = '<p class="muted">No PORTMASTER.md files found</p>';
+    return;
+  }
+  container.innerHTML = files.map(f => `
+    <div class="file-item">
+      <span class="file-path">${f}</span>
+      <button class="action-btn" onclick="invoke('open_config_file', { filePath: '${String(f).replace(/'/g, "\\'")}' })">Open</button>
+    </div>
+  `).join('');
+}
+
+async function checkPort(port) {
+  const inputPort = port || parseInt(document.getElementById('check-port-input').value);
+  if (!inputPort) return;
+
+  const result = await invoke('check_port', { port: inputPort });
+  const container = document.getElementById('check-result');
+
+  if (result.in_use) {
+    container.innerHTML = `
+      <div class="check-result warn">
+        <strong>Port ${result.port} is in use</strong>
+        ${result.process ? `<p>Process: ${result.process} (PID: ${result.pid})</p>` : ''}
+        ${result.suggestion ? `<p>Suggestion: Try port ${result.suggestion}</p>` : ''}
+      </div>
+    `;
+  } else {
+    container.innerHTML = `
+      <div class="check-result ok">
+        <strong>Port ${result.port} is free</strong>
+      </div>
+    `;
+  }
+}
+
+async function suggestPort() {
+  const result = await invoke('suggest_port', { rangeStart: 3000, rangeEnd: 3999 });
+  const container = document.getElementById('check-result');
+  container.innerHTML = `
+    <div class="check-result ok">
+      <strong>Next free port (3000-3999): ${result}</strong>
+    </div>
+  `;
+}
+
+async function applyQuickFix(oldPort, newPort) {
+  if (!confirm(`Change port ${oldPort} to ${newPort}? This will modify config files.`)) return;
+  alert(`Fix feature: Would change port ${oldPort} to ${newPort}. Full implementation requires selecting which config file to update.`);
+}
+
+function openGuide() {
+  const modal = document.getElementById('guide-modal');
+  previousFocus = document.activeElement;
+  modal.classList.remove('hidden');
+  modal.setAttribute('aria-hidden', 'false');
+  document.body.classList.add('modal-open');
+  const closeBtn = document.getElementById('guide-close-btn');
+  if (closeBtn) closeBtn.focus();
+}
+
+function closeGuide() {
+  const modal = document.getElementById('guide-modal');
+  if (modal.classList.contains('hidden')) return;
+  modal.classList.add('hidden');
+  modal.setAttribute('aria-hidden', 'true');
+  document.body.classList.remove('modal-open');
+  if (previousFocus && typeof previousFocus.focus === 'function') {
+    previousFocus.focus();
+  }
+}
+
+updateSortIndicators();
+scan();
+</script>
+</body>
+</html>
