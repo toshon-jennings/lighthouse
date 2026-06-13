@@ -400,8 +400,8 @@ const invoke = async (command, args = {}) => {
 const listen = async () => {};
 
 /// Map raw OS process names to human-readable labels.
-/// The Rust backend returns lsof `c` field (command name) which is often
-/// opaque (e.g. "com.docke", "ControlCe", "LM\x20Stu", "python3.1").
+/// `lsof`'s `c` field (command name) is often opaque
+/// (e.g. "com.docke", "ControlCe", "LM\x20Stu", "python3.1").
 /// This table makes them meaningful at a glance.
 const PROCESS_NAME_MAP = {
   'com.docke':   'Docker Desktop',

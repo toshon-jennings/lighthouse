@@ -1,29 +1,47 @@
 # Lighthouse
 
-Lighthouse is a port-awareness tool for local development.
+Lighthouse is a port-awareness tool for local development. It's a desktop app
+(Electron + Vite) that shows you what's listening on your machine, who owns each
+port, and where conflicts are.
 
-Current prototype includes:
-- Desktop app (Tauri) for scanning live ports
-- Detection of `PORTMASTER.md` files across your machine
-- Scanning project config files for claimed ports
-- CLI companion: `lh`
+Features:
+- Scans live listening ports via `lsof`
+- Detects `PORTMASTER.md` files across your machine and annotates ports with
+  their declared service/owner
+- Per-process detail: PID, parent, start time, working directory, command
+- Quick port check and free-port suggestions
+- Conflict detection with a guided resolve flow
 
-## Current CLI usage
+## Install
 
-From the repo root:
+Grab the latest `.dmg` from the
+[Releases](https://github.com/toshon-jennings/lighthouse/releases) page (Apple
+Silicon), open it, and drag Lighthouse to Applications.
+
+The build is unsigned, so on first launch macOS Gatekeeper will block it.
+Right-click the app → **Open**, or run:
 
 ```bash
-cargo run --bin lh -- list
-cargo run --bin lh -- check 3000
-cargo run --bin lh -- suggest 3000 3999
-cargo run --bin lh -- portmasters
-cargo run --bin lh -- projects
+xattr -dr com.apple.quarantine /Applications/Lighthouse.app
 ```
 
-## Current desktop usage
+## Development
+
+Requires Node.js.
 
 ```bash
-cargo run --bin lighthouse --manifest-path src-tauri/Cargo.toml
+npm install
+npm run electron   # starts Vite + Electron together
+```
+
+The renderer has direct Node.js access (`nodeIntegration`), so port scanning,
+`PORTMASTER.md` parsing, and process lookups run in-process via `child_process`
+— there's no separate backend or IPC bridge.
+
+## Building a release
+
+```bash
+npm run dist       # vite build + electron-builder → release/*.dmg
 ```
 
 ## Design goals
