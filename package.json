@@ -1,0 +1,17 @@
+{
+  "name": "lighthouse",
+  "version": "0.1.0",
+  "private": true,
+  "main": "electron/main.js",
+  "scripts": {
+    "dev": "vite --port 5189 --strictPort",
+    "electron": "concurrently -k -s first \"npm:dev\" \"wait-on http://localhost:5189 && NODE_ENV=development electron .\"",
+    "start": "npm run electron"
+  },
+  "devDependencies": {
+    "vite": "^5.4.1",
+    "electron": "^33.0.0",
+    "concurrently": "^9.0.0",
+    "wait-on": "^8.0.0"
+  }
+}

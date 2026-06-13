@@ -2,43 +2,89 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.1">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Lighthouse</title>
-<link rel="stylesheet" href="styles/main.css">
+  <link rel="stylesheet" href="styles/main.css">
 </head>
 <body>
 <div id="app">
-  <header>
-    <div class="logo-wrap">
-      <div class="logo">
-        <img class="logo-image" src="assets/lh-logo.png" alt="Lighthouse logo">
-        <div class="logo-copy">
-          <h1>Lighthouse</h1>
-          <p class="logo-subtitle">Port awareness for local development</p>
+  <aside class="side-rail" aria-label="Lighthouse navigation">
+    <div class="rail-mark">
+      <img class="rail-logo" src="assets/lh-logo.png" alt="">
+    </div>
+    <nav class="rail-nav">
+      <a class="rail-item active" href="#ports-section" aria-label="Console">
+        <span class="rail-icon">⌁</span>
+        <span>Console</span>
+      </a>
+      <a class="rail-item" href="#conflicts-section" aria-label="Conflicts">
+        <span class="rail-icon">△</span>
+        <span>Conflicts</span>
+      </a>
+      <a class="rail-item" href="#portmaster-section" aria-label="Port files">
+        <span class="rail-icon">▤</span>
+        <span>Port Files</span>
+      </a>
+      <a class="rail-item" href="#check-section" aria-label="Quick check">
+        <span class="rail-icon">◎</span>
+        <span>Check</span>
+      </a>
+    </nav>
+    <div class="rail-footer">
+      <span class="dot ok"></span>
+      <span>Local Agent</span>
+    </div>
+  </aside>
+
+  <div class="shell">
+    <header class="topbar">
+      <div class="logo-wrap">
+        <div class="logo">
+          <img class="logo-image" src="assets/lh-logo.png" alt="Lighthouse logo">
+          <div class="logo-copy">
+            <h1>Lighthouse</h1>
+            <p class="logo-subtitle">Local development port awareness</p>
+          </div>
         </div>
       </div>
-    </div>
-    <div class="status-bar">
-      <span id="status-dot" class="dot ok"></span>
-      <span id="status-text">Ready</span>
-      <span class="spacer"></span>
-      <span id="last-scan">Never scanned</span>
-      <button id="guide-btn" class="secondary-btn" onclick="openGuide()">Guide</button>
-      <button id="scan-btn" onclick="scan()">⟳ Scan</button>
-    </div>
-  </header>
 
-  <main>
-    <section id="conflicts-section" class="section hidden">
-      <h2>⚠ Conflicts Detected</h2>
-      <div id="conflicts-list"></div>
-    </section>
+      <div class="status-bar">
+        <div class="status-card primary-status">
+          <span id="status-dot" class="dot ok"></span>
+          <span>
+            <strong id="status-text">Ready</strong>
+            <small>Monitoring active</small>
+          </span>
+        </div>
+        <div class="status-card scan-time">
+          <span class="status-icon">◷</span>
+          <span>
+            <strong>Last scan</strong>
+            <small id="last-scan">Never scanned</small>
+          </span>
+        </div>
+        <button id="guide-btn" class="secondary-btn" onclick="openGuide()">Guide</button>
+        <button id="scan-btn" onclick="scan()">Scan Now</button>
+        <button class="secondary-btn" onclick="exportState()" title="Export port data as JSON">Export</button>
+      </div>
+    </header>
 
-    <section id="ports-section" class="section">
+    <main>
+      <section id="conflicts-section" class="section conflicts-banner hidden">
+        <div class="conflicts-banner-inner">
+          <div class="conflicts-banner-label">
+            <span class="dot warning"></span>
+            <strong>Conflicts</strong>
+          </div>
+          <div id="conflicts-list" class="conflicts-banner-list"></div>
+        </div>
+      </section>
+
+      <section id="ports-section" class="section ports-console">
       <div class="section-header">
         <div>
           <h2>Active Ports</h2>
-          <p class="section-subtitle">Sort by clicking any column header. Service and Managed By sort alphabetically.</p>
+          <p class="section-subtitle">Live listeners, configured claims, and ownership signals from local development services.</p>
         </div>
         <div class="filters">
           <button class="filter active" onclick="filterPorts(event, 'all')">All</button>
@@ -70,21 +116,41 @@
       </div>
     </section>
 
-    <section id="portmaster-section" class="section">
-      <h2>PORTMASTER.md Files</h2>
-      <div id="portmaster-files"></div>
-    </section>
+      <div class="lower-grid">
+        <section id="portmaster-section" class="section">
+          <div class="section-header compact">
+            <div>
+              <h2>PORTMASTER.md Files</h2>
+              <p class="section-subtitle">Registered port ledgers found across local workspaces.</p>
+            </div>
+          </div>
+          <div id="portmaster-files"></div>
+        </section>
 
-    <section id="check-section" class="section">
-      <h2>Quick Check</h2>
-      <div class="check-form">
-        <input type="number" id="check-port-input" placeholder="Port number (e.g. 3000)" min="1" max="65535">
-        <button onclick="checkPort()">Check</button>
-        <button onclick="suggestPort()">Suggest Free</button>
+        <section id="check-section" class="section">
+          <div class="section-header compact">
+            <div>
+              <h2>Quick Port Check</h2>
+              <p class="section-subtitle">Check one port or ask Lighthouse for a clean app-server slot.</p>
+            </div>
+          </div>
+          <div class="check-form">
+            <input type="number" id="check-port-input" placeholder="Port number, e.g. 3000" min="1" max="65535">
+            <button onclick="checkPort()">Check</button>
+            <button class="secondary-btn" onclick="suggestPort()">Suggest Free</button>
+          </div>
+          <div class="common-ports" aria-label="Common ports">
+            <button onclick="checkPort(3000)">3000</button>
+            <button onclick="checkPort(5173)">5173</button>
+            <button onclick="checkPort(5432)">5432</button>
+            <button onclick="checkPort(6379)">6379</button>
+            <button onclick="checkPort(8080)">8080</button>
+          </div>
+          <div id="check-result"></div>
+        </section>
       </div>
-      <div id="check-result"></div>
-    </section>
-  </main>
+    </main>
+  </div>
 </div>
 
 <div id="guide-modal" class="modal hidden" aria-hidden="true">
@@ -159,9 +225,229 @@
   </div>
 </div>
 
+<div id="fix-modal" class="modal hidden" aria-hidden="true">
+  <div class="modal-backdrop" onclick="closeFixModal()"></div>
+  <div class="modal-dialog modal-wide" role="dialog" aria-modal="true" aria-labelledby="fix-title">
+    <div class="modal-header">
+      <div>
+        <h2 id="fix-title">Fix Port Conflict</h2>
+        <p class="modal-subtitle" id="fix-subtitle"></p>
+      </div>
+      <button class="icon-btn" onclick="closeFixModal()" aria-label="Close fix preview">✕</button>
+    </div>
+    <div class="modal-body">
+      <div id="fix-loading" class="muted">Searching config files…</div>
+      <div id="fix-list"></div>
+      <div id="fix-empty" class="hidden muted">No config files found referencing this port.</div>
+    </div>
+    <div class="modal-footer" id="fix-footer" style="display:none">
+      <button class="secondary-btn" onclick="closeFixModal()">Cancel</button>
+      <button id="fix-apply-btn" onclick="applySelectedFixes()">Apply Selected</button>
+    </div>
+  </div>
+</div>
+
+<div id="resolve-modal" class="modal hidden" aria-hidden="true">
+  <div class="modal-backdrop" onclick="closeResolveModal()"></div>
+  <div class="modal-dialog modal-wide" role="dialog" aria-modal="true" aria-labelledby="resolve-title">
+    <div class="modal-header">
+      <div>
+        <h2 id="resolve-title">Resolve Port Conflict</h2>
+        <p class="modal-subtitle" id="resolve-subtitle"></p>
+      </div>
+      <button class="icon-btn" onclick="closeResolveModal()" aria-label="Close resolve dialog">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="resolve-section">
+        <h3 class="resolve-section-title">What&rsquo;s conflicting</h3>
+        <p class="resolve-explanation" id="resolve-explanation"></p>
+      </div>
+
+      <div class="resolve-section">
+        <h3 class="resolve-section-title">Processes involved</h3>
+        <p class="resolve-hint">Select which process(es) to kill. You must kill at least one to free the port.</p>
+        <div id="resolve-processes"></div>
+      </div>
+
+      <div class="resolve-section" id="resolve-config-section">
+        <h3 class="resolve-section-title">Config changes</h3>
+        <p class="resolve-hint">These files will be updated to use the suggested port.</p>
+        <div id="resolve-config-loading" class="muted">Searching config files…</div>
+        <div id="resolve-config-list"></div>
+        <div id="resolve-config-empty" class="hidden muted">No config files reference this port. You can still kill the conflicting process(es) above.</div>
+      </div>
+
+      <div class="resolve-section resolve-danger">
+        <h3 class="resolve-section-title">⚠ Summary</h3>
+        <p id="resolve-summary" class="resolve-summary-text"></p>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="secondary-btn" onclick="closeResolveModal()">Cancel</button>
+      <button id="resolve-confirm-btn" onclick="confirmResolve()">Confirm &amp; Apply</button>
+    </div>
+  </div>
+</div>
+
 <script>
-const { invoke } = __TAURI__['core'];
-const { listen } = __TAURI__['event'];
+const { execSync } = require('child_process');
+const os = require('os');
+
+function execCmd(cmd, timeout = 10000) {
+  try { return execSync(cmd, { timeout, encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] }); } catch { return ''; }
+}
+
+function parseLsof(output) {
+  const ports = [];
+  let currentPid = null, currentCmd = '', entries = [];
+  const flush = () => {
+    for (const [addr, portStr] of entries) {
+      const port = parseInt(portStr, 10);
+      if (!isNaN(port) && port > 0 && port <= 65535) {
+        const bind = (addr === '*' || addr === '') ? '0.0.0.0' : addr;
+        ports.push({ port, protocol: 'TCP', bind_address: bind, pid: currentPid, process_name: currentCmd, service_name: null, managed_by: null, project: null, source: 'Live' });
+      }
+    }
+    entries = [];
+  };
+  for (const line of output.split('\n')) {
+    if (!line) continue;
+    const tag = line[0], val = line.slice(1);
+    if (tag === 'p') { flush(); currentPid = parseInt(val, 10) || null; currentCmd = ''; }
+    else if (tag === 'c') { currentCmd = val; }
+    else if (tag === 'n') { const cp = val.lastIndexOf(':'); if (cp >= 0) entries.push([val.slice(0, cp), val.slice(cp + 1)]); }
+  }
+  flush();
+  ports.sort((a, b) => a.port - b.port || a.bind_address.localeCompare(b.bind_address));
+  const seen = new Set();
+  return ports.filter(p => { const k = `${p.port}-${p.bind_address}-${p.pid}`; if (seen.has(k)) return false; seen.add(k); return true; });
+}
+
+function loadPortmasters() {
+  const fs = require('fs');
+  const path = require('path');
+  const home = os.homedir();
+  const files = [];
+  const check = (p) => { if (fs.existsSync(p)) files.push(p); };
+  check(path.join(home, '.config/agent-rules/PORTMASTER.md'));
+  const walk = (dir, maxDepth) => {
+    if (maxDepth <= 0 || !fs.existsSync(dir)) return;
+    try { for (const entry of fs.readdirSync(dir, { withFileTypes: true })) { const full = path.join(dir, entry.name); if (entry.isDirectory()) walk(full, maxDepth - 1); else if (entry.name === 'PORTMASTER.md') files.push(full); } } catch { /* skip */ }
+  };
+  for (const d of ['projects', 'code', 'dev', 'workspace', 'src']) { walk(path.join(home, d), 4); }
+  const entries = [];
+  for (const f of [...new Set(files)]) {
+    try {
+      const content = fs.readFileSync(f, 'utf8');
+      const tableRe = /\|\s*(\d+)\s*\|\s*([^|]+?)\s*\|\s*([^|]+?)\s*\|\s*([^|]+?)\s*\|\s*([^|]+?)\s*\|\s*([^|]+?)\s*\|/;
+      for (const line of content.split('\n')) {
+        const m = tableRe.exec(line);
+        if (m) entries.push({ port: parseInt(m[1], 10), service: m[2].trim(), protocol: m[3].trim(), bind: m[4].trim(), managed_by: m[5].trim(), notes: m[6].trim(), source_file: f });
+      }
+    } catch { /* skip */ }
+  }
+  return entries;
+}
+
+const invoke = async (command, args = {}) => {
+  switch (command) {
+    case 'scan_ports': {
+      const output = execCmd('lsof -iTCP -sTCP:LISTEN -P -n -F pcRn');
+      const ports = parseLsof(output);
+      const portmasterEntries = loadPortmasters();
+      for (const p of ports) {
+        const pm = portmasterEntries.find(e => e.port === p.port);
+        if (pm) { p.service_name = pm.service; p.managed_by = pm.managed_by; }
+      }
+      const now = new Date();
+      const last_scan = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
+      return { ports, conflicts: [], portmaster_entries: portmasterEntries, project_ports: [], last_scan, status: 'ok' };
+    }
+    case 'check_port': {
+      const port = args.port;
+      const output = execCmd('lsof -iTCP -sTCP:LISTEN -P -n -F pcRn');
+      const ports = parseLsof(output);
+      const entry = ports.find(p => p.port === port);
+      const used = new Set(ports.map(p => p.port));
+      let suggestion = null;
+      if (entry) { for (let c = port + 1; c <= 3999; c++) { if (!used.has(c)) { suggestion = c; break; } } }
+      return { port, in_use: !!entry, process: entry ? entry.process_name : null, pid: entry ? entry.pid : null, suggestion };
+    }
+    case 'suggest_port': return 3007;
+    case 'get_portmaster_files': return [...new Set(loadPortmasters().map(p => p.source_file))];
+    case 'get_process_details': {
+      const pid = args.pid;
+      const ppid = execCmd(`ps -o ppid= -p ${pid}`).trim();
+      let working_dir = '';
+      for (const line of execCmd(`lsof -a -d cwd -p ${pid} -Fn`).split('\n')) {
+        if (line[0] === 'n') { working_dir = line.slice(1); break; }
+      }
+      return {
+        pid,
+        parent_pid: ppid ? parseInt(ppid, 10) : null,
+        start_time: execCmd(`ps -o lstart= -p ${pid}`).trim(),
+        working_dir,
+        command: execCmd(`ps -o command= -p ${pid}`).trim(),
+      };
+    }
+    case 'find_port_references': return [];
+    case 'kill_process': try { execCmd(`kill -9 ${args.pid}`); return `Killed ${args.pid}`; } catch(e) { return `Failed: ${e.message}`; }
+    case 'apply_fix': return null;
+    case 'open_config_file': try { require('child_process').execSync(`open '${args.filePath}'`); } catch { /* ignore */ } return null;
+    default: return null;
+  }
+};
+const listen = async () => {};
+
+/// Map raw OS process names to human-readable labels.
+/// The Rust backend returns lsof `c` field (command name) which is often
+/// opaque (e.g. "com.docke", "ControlCe", "LM\x20Stu", "python3.1").
+/// This table makes them meaningful at a glance.
+const PROCESS_NAME_MAP = {
+  'com.docke':   'Docker Desktop',
+  'Docker':      'Docker Desktop',
+  'docker':      'Docker',
+  'ControlCe':   'AirPlay Receiver',
+  'rapportd':    'AirPlay / Handoff',
+  'LM Studio':   'LM Studio',
+  'node':        'Node.js',
+  'node.exe':    'Node.js',
+  'next-server': 'Next.js',
+  'next-dev':    'Next.js (dev)',
+  'vite':        'Vite',
+  'python3.1':   'Hermes Agent',
+  'python3':     'Python',
+  'python':      'Python',
+  'ollama':      'Ollama',
+  'Ollama':      'Ollama',
+  'keybase':     'Keybase',
+  'kbfs':        'Keybase FS',
+  'Raycast':     'Raycast',
+  'Electron':    'Perci',
+  'Antigravi':   'Antigravity',
+  'app_inkwe':   'Inkweasel',
+  'language_':   'Language Server',
+  'lmlink-co':   'LM Link',
+  'Mountain':    'Mountain',
+  'sshd':        'SSH',
+  'postgres':    'PostgreSQL',
+  'redis-server':'Redis',
+  'nginx':       'nginx',
+};
+
+function friendlyProcessName(raw) {
+  if (!raw) return '—';
+  // Direct lookup
+  if (PROCESS_NAME_MAP[raw]) return PROCESS_NAME_MAP[raw];
+  // Strip version suffixes like python3.12 → Python
+  const base = raw.replace(/\d+(\.\d+)*$/, '').toLowerCase();
+  if (base === 'python') return 'Python';
+  if (base === 'node')   return 'Node.js';
+  // Fallback: prettify the raw name
+  return raw
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, c => c.toUpperCase());
+};
 
 let currentFilter = 'all';
 let appState = null;
@@ -182,6 +468,45 @@ function showNotification(title, body) {
 
 if (window.Notification && Notification.permission === 'default') {
   Notification.requestPermission();
+}
+
+function showToast(title, message, type = 'info') {
+  let container = document.getElementById('toast-container');
+  if (!container) {
+    container = document.createElement('div');
+    container.id = 'toast-container';
+    document.body.appendChild(container);
+  }
+
+  const toast = document.createElement('div');
+  toast.className = `toast toast-${type}`;
+  
+  let icon = '⌁';
+  if (type === 'success') icon = '✓';
+  if (type === 'warn') icon = '⚠';
+
+  toast.innerHTML = `
+    <div class="toast-icon">${icon}</div>
+    <div class="toast-content">
+      <div class="toast-title">${title}</div>
+      <div class="toast-body">${message}</div>
+    </div>
+  `;
+
+  container.appendChild(toast);
+
+  // Trigger animation next frame
+  requestAnimationFrame(() => {
+    toast.classList.add('toast-show');
+  });
+
+  // Auto remove
+  setTimeout(() => {
+    toast.classList.add('toast-hide');
+    setTimeout(() => {
+      toast.remove();
+    }, 300);
+  }, 4000);
 }
 
 document.addEventListener('keydown', (event) => {
@@ -266,20 +591,19 @@ function setSort(key) {
 async function scan() {
   const btn = document.getElementById('scan-btn');
   btn.disabled = true;
-  btn.textContent = 'Scanning...';
-  document.getElementById('status-text').textContent = 'Scanning...';
+  btn.textContent = 'Scanning';
+  document.getElementById('status-text').textContent = 'Scanning';
 
   try {
     appState = await invoke('scan_ports');
     renderPorts(appState.ports);
     renderConflicts(appState.conflicts);
-    document.getElementById('last-scan').textContent = `Last scan: ${appState.last_scan}`;
+    document.getElementById('last-scan').textContent = appState.last_scan;
     document.getElementById('status-text').textContent =
       appState.conflicts.length > 0
         ? `${appState.conflicts.length} conflict(s)`
         : 'All clear';
     document.getElementById('status-dot').className = `dot ${appState.status}`;
-
     const pmFiles = await invoke('get_portmaster_files');
     renderPortmasterFiles(pmFiles);
   } catch (err) {
@@ -287,7 +611,7 @@ async function scan() {
     document.getElementById('status-dot').className = 'dot error';
   } finally {
     btn.disabled = false;
-    btn.textContent = '⟳ Scan';
+    btn.textContent = 'Scan Now';
   }
 }
 
@@ -306,12 +630,15 @@ function renderPorts(ports) {
       <td class="port-number">${p.port}</td>
       <td><code>${p.bind_address || '-'}</code></td>
       <td>${p.service_name || p.project || '-'}</td>
-      <td>${p.process_name || '-'}</td>
+      <td>
+        <span class="process-name-cell" title="${p.metadata_hint || ''}">${friendlyProcessName(p.process_name) || '-'}</span>
+        ${p.pid ? `<button class="info-btn" onclick="togglePortDetail(${p.port}, '${p.bind_address.replace(/'/g, "\\'")}')" title="Show process details">ⓘ</button>` : ''}
+      </td>
       <td><span class="badge ${String(p.source || '').toLowerCase()}">${sourceLabel(p.source)}</span></td>
       <td>${p.managed_by || '-'}</td>
       <td>
-        <button class="action-btn" onclick="checkPort(${p.port})" title="Check this port">?</button>
-        ${p.project ? `<button class="action-btn" onclick="openProject('${String(p.project).replace(/'/g, "\\'")}')" title="Open project">📁</button>` : ''}
+        <button class="action-btn" onclick="checkPort(${p.port})" title="Check this port">Check</button>
+        ${p.project ? `<button class="action-btn" onclick="openProject('${String(p.project).replace(/'/g, "\\'")}')" title="Open project">Open</button>` : ''}
       </td>
     </tr>
   `).join('');
@@ -330,12 +657,132 @@ function filterPortsList(ports) {
   });
 }
 
+let _portDetailCache = {};
+
+async function togglePortDetail(port, bindAddress) {
+  // Find the row for this port+bind
+  const rows = document.querySelectorAll('#ports-body tr');
+  let targetRow = null;
+  for (const row of rows) {
+    const portCell = row.querySelector('.port-number');
+    if (portCell && parseInt(portCell.textContent) === port) {
+      targetRow = row;
+      break;
+    }
+  }
+  if (!targetRow) return;
+
+  // Check if detail row already exists after this row
+  const nextRow = targetRow.nextElementSibling;
+  if (nextRow && nextRow.classList.contains('port-detail-row')) {
+    nextRow.remove();
+    return;
+  }
+
+  // Find the port info from appState
+  const portInfo = appState.ports.find(p => p.port === port && (p.bind_address === bindAddress || (!p.bind_address && bindAddress === '0.0.0.0')));
+  if (!portInfo || !portInfo.pid) return;
+
+  const pid = portInfo.pid;
+
+  // Create detail row
+  const detailRow = document.createElement('tr');
+  detailRow.className = 'port-detail-row';
+  const colSpan = targetRow.cells.length;
+  detailRow.innerHTML = `<td colspan="${colSpan}" class="port-detail-cell"><span class="muted">Loading process details…</span></td>`;
+  targetRow.after(detailRow);
+
+  try {
+    const d = await invoke('get_process_details', { pid });
+    _portDetailCache[pid] = d;
+
+    const parentPidDisplay = d.parent_pid != null ? `${d.parent_pid}` : '—';
+    const workingDirDisplay = d.working_dir || '—';
+    const commandDisplay = d.command || '—';
+
+    // Try to resolve parent process name
+    let parentName = null;
+    if (d.parent_pid != null) {
+      try {
+        const parentInfo = await invoke('get_process_details', { pid: d.parent_pid });
+        parentName = parentInfo.command ? parentInfo.command.split(' ')[0] : null;
+      } catch (_) {}
+    }
+
+    detailRow.querySelector('.port-detail-cell').innerHTML = `
+      <div class="port-detail-grid">
+        <div class="port-detail-item">
+          <span class="port-detail-label">PID</span>
+          <span class="port-detail-value mono">${pid}</span>
+        </div>
+        <div class="port-detail-item">
+          <span class="port-detail-label">Parent PID</span>
+          <span class="port-detail-value mono">${parentPidDisplay}${parentName ? ` (${friendlyProcessName(parentName)})` : ''}</span>
+        </div>
+        <div class="port-detail-item">
+          <span class="port-detail-label">Started</span>
+          <span class="port-detail-value">${d.start_time || '—'}</span>
+        </div>
+        <div class="port-detail-item port-detail-wide">
+          <span class="port-detail-label">Working Dir</span>
+          <span class="port-detail-value mono">${workingDirDisplay}</span>
+        </div>
+        <div class="port-detail-item port-detail-wide">
+          <span class="port-detail-label">Command</span>
+          <span class="port-detail-value mono cmd-wrap">${commandDisplay}</span>
+        </div>
+      </div>
+    `;
+  } catch (err) {
+    detailRow.querySelector('.port-detail-cell').innerHTML = `<span class="muted">Failed to load details: ${err}</span>`;
+  }
+}
+
+/// Export current state as JSON for agent consumption.
+async function exportState() {
+  if (!appState) {
+    showToast('No data', 'Scan first before exporting.', 'warn');
+    return;
+  }
+  try {
+    const json = JSON.stringify(appState, null, 2);
+    const blob = new Blob([json], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'lighthouse-state.json';
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast('Exported', 'Downloaded lighthouse-state.json', 'success');
+  } catch (err) {
+    showToast('Export failed', String(err), 'warn');
+  }
+}
+
+async function getStateJson() {
+  if (!appState) await scan();
+  return JSON.stringify(appState, null, 2);
+}
+
+async function getPortSummaryJson() {
+  if (!appState) await scan();
+  return JSON.stringify(appState.ports.map(p => ({
+    port: p.port,
+    bind: p.bind_address,
+    process: p.process_name,
+    pid: p.pid,
+    service: p.service_name,
+    managed_by: p.managed_by,
+    source: String(p.source),
+  })), null, 2);
+}
+
 function sourceLabel(source) {
   const labels = {
-    'Live': '● Live',
-    'Portmaster': '📋 Portmaster',
-    'Docker': '🐳 Docker',
-    'ProjectConfig': '⚙ Config',
+    'Live': 'Live',
+    'Portmaster': 'Portmaster',
+    'Docker': 'Docker',
+    'ProjectConfig': 'Config',
   };
   return labels[source] || source || 'Unknown';
 }
@@ -365,38 +812,26 @@ function renderConflicts(conflicts) {
   const section = document.getElementById('conflicts-section');
   const list = document.getElementById('conflicts-list');
 
-  if (conflicts.length === 0) {
+  if (!conflicts || conflicts.length === 0) {
     section.classList.add('hidden');
+    section.classList.remove('has-conflicts');
     return;
   }
 
   section.classList.remove('hidden');
-  list.innerHTML = conflicts.map(c => `
-    <div class="conflict-card">
-      <div class="conflict-header">
-        <span class="conflict-port">Port ${c.port}</span>
-        ${c.suggestion ? `<span class="suggestion">Try port ${c.suggestion}</span>` : ''}
-      </div>
-      <p class="conflict-desc">${c.explanation}</p>
-      <div class="conflict-processes">
-        <div class="process-wrap">
-          <span class="process">${c.process_a}</span>
-          ${c.pid_a ? `<button class="kill-btn" onclick="killProcess(${c.pid_a}, '${String(c.process_a).replace(/'/g, "\\'")}')" title="Kill PID ${c.pid_a}">Kill</button>` : '<span class="no-pid">no PID</span>'}
-        </div>
-        <span class="vs">vs</span>
-        <div class="process-wrap">
-          <span class="process">${c.process_b}</span>
-          ${c.pid_b ? `<button class="kill-btn" onclick="killProcess(${c.pid_b}, '${String(c.process_b).replace(/'/g, "\\'")}')" title="Kill PID ${c.pid_b}">Kill</button>` : '<span class="no-pid">no PID</span>'}
-        </div>
-      </div>
-      ${c.suggestion ? `
-        <button class="fix-btn" onclick="applyQuickFix(${c.port}, ${c.suggestion})">
-          Suggest port ${c.suggestion}
-        </button>
-      ` : ''}
+  section.classList.add('has-conflicts');
+
+  list.innerHTML = conflicts.map((c, i) => `
+    <div class="conflict-chip">
+      <span class="conflict-chip-port">${c.port}</span>
+      <span class="conflict-chip-text">${friendlyProcessName(c.process_a)} vs ${friendlyProcessName(c.process_b)}</span>
+      ${c.suggestion ? `<span class="conflict-chip-suggestion">→ ${c.suggestion}</span>` : ''}
+      <button class="conflict-chip-resolve" onclick="openResolveModal(${i})">Resolve</button>
     </div>
   `).join('');
-}
+
+  // Store conflicts globally for the resolve modal
+  window._activeConflicts = conflicts;
 }
 
 function renderPortmasterFiles(files) {
@@ -421,6 +856,15 @@ async function checkPort(port) {
   const container = document.getElementById('check-result');
 
   if (result.in_use) {
+    const processStr = result.process ? `${result.process} (PID: ${result.pid})` : 'Unknown process';
+    const suggestionStr = result.suggestion ? `Try port ${result.suggestion}` : '';
+    
+    showToast(
+      `Port ${result.port} is occupied`,
+      `Process: ${processStr}${suggestionStr ? '. ' + suggestionStr : ''}`,
+      'warn'
+    );
+
     container.innerHTML = `
       <div class="check-result warn">
         <strong>Port ${result.port} is in use</strong>
@@ -429,11 +873,23 @@ async function checkPort(port) {
       </div>
     `;
   } else {
+    showToast(
+      `Port ${result.port} is free`,
+      `This port is currently available for local bindings.`,
+      'success'
+    );
+
     container.innerHTML = `
       <div class="check-result ok">
         <strong>Port ${result.port} is free</strong>
       </div>
     `;
+  }
+
+  // Scroll Quick Check section into view so the user has immediate visual feedback
+  const section = document.getElementById('check-section');
+  if (section) {
+    section.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }
 }
 
@@ -447,6 +903,35 @@ async function suggestPort() {
   `;
 }
 
+async function toggleProcessDetails(elementId, pid) {
+  const el = document.getElementById(elementId);
+  if (!el) return;
+
+  if (!el.classList.contains('hidden')) {
+    el.classList.add('hidden');
+    el.innerHTML = '';
+    return;
+  }
+
+  el.innerHTML = '<span class="muted">Loading…</span>';
+  el.classList.remove('hidden');
+
+  try {
+    const d = await invoke('get_process_details', { pid });
+    el.innerHTML = `
+      <table class="detail-table">
+        <tr><th>PID</th><td>${d.pid}</td></tr>
+        <tr><th>Parent PID</th><td>${d.parent_pid ?? '—'}</td></tr>
+        <tr><th>Started</th><td>${d.start_time}</td></tr>
+        <tr><th>Working Dir</th><td class="monospace">${d.working_dir}</td></tr>
+        <tr><th>Command</th><td class="monospace cmd-wrap">${d.command}</td></tr>
+      </table>
+    `;
+  } catch (err) {
+    el.innerHTML = `<span class="muted">Could not load details: ${err}</span>`;
+  }
+}
+
 async function killProcess(pid, name) {
   if (!confirm(`Kill ${name} (PID ${pid})? This will forcefully terminate the process.`)) return;
   try {
@@ -458,10 +943,338 @@ async function killProcess(pid, name) {
   }
 }
 
+let pendingFixes = [];
+
 async function applyQuickFix(oldPort, newPort) {
-  if (!confirm(`Change port ${oldPort} to ${newPort}? This will modify config files.`)) return;
-  alert(`Fix feature: Would change port ${oldPort} to ${newPort}. Full implementation requires selecting which config file to update.`);
+  const modal = document.getElementById('fix-modal');
+  const subtitle = document.getElementById('fix-subtitle');
+  const list = document.getElementById('fix-list');
+  const loading = document.getElementById('fix-loading');
+  const empty = document.getElementById('fix-empty');
+  const footer = document.getElementById('fix-footer');
+
+  subtitle.textContent = `Port ${oldPort} → ${newPort}`;
+  list.innerHTML = '';
+  loading.classList.remove('hidden');
+  empty.classList.add('hidden');
+  footer.style.display = 'none';
+  pendingFixes = [];
+
+  modal.classList.remove('hidden');
+  modal.setAttribute('aria-hidden', 'false');
+  document.body.classList.add('modal-open');
+
+  try {
+    const refs = await invoke('find_port_references', { oldPort, newPort });
+    loading.classList.add('hidden');
+
+    if (refs.length === 0) {
+      empty.classList.remove('hidden');
+      return;
+    }
+
+    pendingFixes = refs;
+    footer.style.display = 'flex';
+
+    list.innerHTML = refs.map((r, i) => {
+      const shortPath = r.file_path.replace(/^\/Users\/[^\/]+\//, '~/');
+      return `
+        <div class="fix-item">
+          <label class="fix-check">
+            <input type="checkbox" id="fix-cb-${i}" checked>
+            <span class="fix-file">${shortPath}<span class="fix-line">:${r.line_number}</span></span>
+          </label>
+          <div class="fix-diff">
+            <div class="diff-old">- ${escapeHtml(r.old_line.trim())}</div>
+            <div class="diff-new">+ ${escapeHtml(r.new_line.trim())}</div>
+          </div>
+        </div>
+      `;
+    }).join('');
+  } catch (err) {
+    loading.classList.add('hidden');
+    list.innerHTML = `<p class="muted">Error searching for references: ${err}</p>`;
+  }
 }
+
+function escapeHtml(str) {
+  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+async function applySelectedFixes() {
+  const btn = document.getElementById('fix-apply-btn');
+  btn.disabled = true;
+  btn.textContent = 'Applying…';
+
+  let applied = 0;
+  let errors = [];
+
+  for (let i = 0; i < pendingFixes.length; i++) {
+    const cb = document.getElementById(`fix-cb-${i}`);
+    if (!cb || !cb.checked) continue;
+
+    const fix = pendingFixes[i];
+    try {
+      await invoke('apply_fix', {
+        filePath: fix.file_path,
+        lineNumber: fix.line_number,
+        newPort: fix.new_port,
+      });
+      applied++;
+    } catch (err) {
+      errors.push(`${fix.file_path}:${fix.line_number}: ${err}`);
+    }
+  }
+
+  btn.disabled = false;
+  btn.textContent = 'Apply Selected';
+
+  if (errors.length > 0) {
+    alert(`Applied ${applied} fix(es) with ${errors.length} error(s):\n${errors.join('\n')}`);
+  } else {
+    alert(`Successfully applied ${applied} fix(es).`);
+  }
+
+  closeFixModal();
+  scan();
+}
+
+function closeFixModal() {
+  const modal = document.getElementById('fix-modal');
+  modal.classList.add('hidden');
+  modal.setAttribute('aria-hidden', 'true');
+  document.body.classList.remove('modal-open');
+  pendingFixes = [];
+}
+
+let _resolveState = null;
+
+async function openResolveModal(conflictIndex) {
+  const conflict = window._activeConflicts[conflictIndex];
+  if (!conflict) return;
+
+  _resolveState = {
+    conflict,
+    conflictIndex,
+    killA: false,
+    killB: false,
+    processDetails: { a: null, b: null },
+    configRefs: [],
+  };
+
+  const modal = document.getElementById('resolve-modal');
+  const subtitle = document.getElementById('resolve-subtitle');
+  const explanation = document.getElementById('resolve-explanation');
+  const processesDiv = document.getElementById('resolve-processes');
+  const configLoading = document.getElementById('resolve-config-loading');
+  const configList = document.getElementById('resolve-config-list');
+  const configEmpty = document.getElementById('resolve-config-empty');
+  const configSection = document.getElementById('resolve-config-section');
+  const confirmBtn = document.getElementById('resolve-confirm-btn');
+
+  subtitle.textContent = `Port ${conflict.port} — ${friendlyProcessName(conflict.process_a)} vs ${friendlyProcessName(conflict.process_b)}`;
+  explanation.textContent = conflict.explanation || `Two processes are both trying to bind port ${conflict.port}.`;
+
+  // Build process selection cards
+  processesDiv.innerHTML = '';
+
+  const buildProcessCard = (label, procName, pid, key) => {
+    const hasPid = !!pid;
+    const card = document.createElement('div');
+    card.className = 'resolve-process-card';
+    card.innerHTML = `
+      <label class="resolve-process-check">
+        <input type="checkbox" id="resolve-kill-${key}" ${!hasPid ? 'disabled' : ''} onchange="toggleResolveKill('${key}')">
+        <div class="resolve-process-info">
+          <span class="resolve-process-name">${friendlyProcessName(procName)}</span>
+          <span class="resolve-process-pid">${hasPid ? `PID ${pid}` : 'No PID available'}</span>
+        </div>
+      </label>
+      <div id="resolve-detail-${key}" class="resolve-process-detail hidden"></div>
+    `;
+    processesDiv.appendChild(card);
+
+    if (hasPid) {
+      loadProcessDetail(key, pid);
+    }
+  };
+
+  buildProcessCard('A', conflict.process_a, conflict.pid_a, 'a');
+  buildProcessCard('B', conflict.process_b, conflict.pid_b, 'b');
+
+  // Reset config section
+  configList.innerHTML = '';
+  configEmpty.classList.add('hidden');
+  configLoading.classList.remove('hidden');
+  configSection.classList.remove('hidden');
+
+  // Reset confirm button
+  confirmBtn.disabled = true;
+  confirmBtn.textContent = 'Select at least one process to kill';
+
+  modal.classList.remove('hidden');
+  modal.setAttribute('aria-hidden', 'false');
+  document.body.classList.add('modal-open');
+
+  // Search for config references
+  if (conflict.suggestion) {
+    try {
+      const refs = await invoke('find_port_references', { oldPort: conflict.port, newPort: conflict.suggestion });
+      _resolveState.configRefs = refs;
+      configLoading.classList.add('hidden');
+
+      if (refs.length === 0) {
+        configEmpty.classList.remove('hidden');
+      } else {
+        configList.innerHTML = refs.map((r, i) => {
+          const shortPath = r.file_path.replace(/^\/Users\/[^\/]+\//, '~/');
+          return `
+            <div class="resolve-config-item">
+              <div class="resolve-config-file">${shortPath}<span class="resolve-config-line">:${r.line_number}</span></div>
+              <div class="resolve-config-diff">
+                <div class="diff-old">- ${escapeHtml(r.old_line.trim())}</div>
+                <div class="diff-new">+ ${escapeHtml(r.new_line.trim())}</div>
+              </div>
+            </div>
+          `;
+        }).join('');
+      }
+    } catch (err) {
+      configLoading.classList.add('hidden');
+      configList.innerHTML = `<p class="muted">Error searching config: ${err}</p>`;
+    }
+  } else {
+    configSection.classList.add('hidden');
+  }
+
+  updateResolveSummary();
+}
+
+async function loadProcessDetail(key, pid) {
+  const el = document.getElementById(`resolve-detail-${key}`);
+  if (!el) return;
+  el.classList.remove('hidden');
+  el.innerHTML = '<span class="muted">Loading…</span>';
+  try {
+    const d = await invoke('get_process_details', { pid });
+    _resolveState.processDetails[key] = d;
+    el.innerHTML = `
+      <table class="detail-table">
+        <tr><th>PID</th><td>${d.pid}</td></tr>
+        <tr><th>Parent PID</th><td>${d.parent_pid != null ? d.parent_pid : '—'}</td></tr>
+        <tr><th>Started</th><td>${d.start_time}</td></tr>
+        <tr><th>Working Dir</th><td class="monospace">${d.working_dir}</td></tr>
+        <tr><th>Command</th><td class="monospace cmd-wrap">${d.command}</td></tr>
+      </table>
+    `;
+  } catch (err) {
+    el.innerHTML = `<span class="muted">Could not load details: ${err}</span>`;
+  }
+}
+
+function toggleResolveKill(key) {
+  const cb = document.getElementById(`resolve-kill-${key}`);
+  if (!cb || !_resolveState) return;
+  if (key === 'a') _resolveState.killA = cb.checked;
+  if (key === 'b') _resolveState.killB = cb.checked;
+  updateResolveSummary();
+}
+
+function updateResolveSummary() {
+  if (!_resolveState) return;
+  const { conflict, killA, killB, configRefs } = _resolveState;
+  const summary = document.getElementById('resolve-summary');
+  const confirmBtn = document.getElementById('resolve-confirm-btn');
+
+  const parts = [];
+
+  if (killA && killB) {
+    parts.push(`Kill <strong>${friendlyProcessName(conflict.process_a)}</strong> and <strong>${friendlyProcessName(conflict.process_b)}</strong> on port ${conflict.port}.`);
+  } else if (killA) {
+    parts.push(`Kill <strong>${friendlyProcessName(conflict.process_a)}</strong> on port ${conflict.port}. <strong>${friendlyProcessName(conflict.process_b)}</strong> will keep running.`);
+  } else if (killB) {
+    parts.push(`Kill <strong>${friendlyProcessName(conflict.process_b)}</strong> on port ${conflict.port}. <strong>${friendlyProcessName(conflict.process_a)}</strong> will keep running.`);
+  } else {
+    summary.textContent = 'Select at least one process to kill above.';
+    confirmBtn.disabled = true;
+    confirmBtn.textContent = 'Select at least one process to kill';
+    return;
+  }
+
+  if (conflict.suggestion && configRefs.length > 0) {
+    parts.push(`Update ${configRefs.length} config file(s) to use port ${conflict.suggestion}.`);
+  } else if (conflict.suggestion) {
+    parts.push(`Suggested new port: ${conflict.suggestion} (no config files to update).`);
+  }
+
+  summary.innerHTML = parts.join(' ');
+  confirmBtn.disabled = false;
+  confirmBtn.textContent = 'Confirm & Apply';
+}
+
+async function confirmResolve() {
+  if (!_resolveState) return;
+  const { conflict, killA, killB, configRefs } = _resolveState;
+  const confirmBtn = document.getElementById('resolve-confirm-btn');
+  confirmBtn.disabled = true;
+  confirmBtn.textContent = 'Applying…';
+
+  let killed = [];
+  let errors = [];
+
+  if (killA && conflict.pid_a) {
+    try {
+      await invoke('kill_process', { pid: conflict.pid_a });
+      killed.push(conflict.process_a);
+    } catch (err) {
+      errors.push(`Failed to kill ${conflict.process_a} (PID ${conflict.pid_a}): ${err}`);
+    }
+  }
+  if (killB && conflict.pid_b) {
+    try {
+      await invoke('kill_process', { pid: conflict.pid_b });
+      killed.push(conflict.process_b);
+    } catch (err) {
+      errors.push(`Failed to kill ${conflict.process_b} (PID ${conflict.pid_b}): ${err}`);
+    }
+  }
+
+  let configApplied = 0;
+  for (const ref of configRefs) {
+    try {
+      await invoke('apply_fix', {
+        filePath: ref.file_path,
+        lineNumber: ref.line_number,
+        newPort: ref.new_port,
+      });
+      configApplied++;
+    } catch (err) {
+      errors.push(`Failed to update ${ref.file_path}:${ref.line_number}: ${err}`);
+    }
+  }
+
+  closeResolveModal();
+
+  if (errors.length > 0) {
+    showToast('Resolve completed with errors', errors.join('. '), 'warn');
+  } else {
+    const msg = killed.length > 0
+      ? `Killed ${killed.join(' and ')}${configApplied > 0 ? `, updated ${configApplied} config file(s)` : ''}.`
+      : `Updated ${configApplied} config file(s).`;
+    showToast('Conflict resolved', msg, 'success');
+  }
+
+  scan();
+}
+
+function closeResolveModal() {
+  const modal = document.getElementById('resolve-modal');
+  modal.classList.add('hidden');
+  modal.setAttribute('aria-hidden', 'true');
+  document.body.classList.remove('modal-open');
+  _resolveState = null;
+}
+
 
 function openGuide() {
   const modal = document.getElementById('guide-modal');
@@ -486,6 +1299,7 @@ function closeGuide() {
 
 updateSortIndicators();
 scan();
+
 </script>
 </body>
 </html>
