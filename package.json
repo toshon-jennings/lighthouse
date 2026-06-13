@@ -6,12 +6,33 @@
   "scripts": {
     "dev": "vite --port 5189 --strictPort",
     "electron": "concurrently -k -s first \"npm:dev\" \"wait-on http://localhost:5189 && NODE_ENV=development electron .\"",
-    "start": "npm run electron"
+    "start": "npm run electron",
+    "build": "vite build",
+    "dist": "npm run build && electron-builder --mac dmg"
   },
   "devDependencies": {
-    "vite": "^5.4.1",
-    "electron": "^33.0.0",
     "concurrently": "^9.0.0",
+    "electron": "^33.0.0",
+    "electron-builder": "^25.1.8",
+    "vite": "^5.4.1",
     "wait-on": "^8.0.0"
+  },
+  "build": {
+    "appId": "tech.toshon.lighthouse",
+    "productName": "Lighthouse",
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "electron/**/*",
+      "dist/**/*"
+    ],
+    "mac": {
+      "target": "dmg",
+      "category": "public.app-category.developer-tools",
+      "icon": "build/icon.png",
+      "identity": null
+    }
   }
 }

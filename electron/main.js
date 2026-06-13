@@ -1,4 +1,5 @@
 const { app, BrowserWindow } = require('electron');
+const path = require('path');
 
 let mainWindow;
 
@@ -18,7 +19,13 @@ function createWindow() {
     },
   });
 
-  mainWindow.loadURL('http://localhost:5189');
+  // In dev we point at the Vite server; a packaged build loads the static
+  // bundle produced by `vite build`.
+  if (app.isPackaged) {
+    mainWindow.loadFile(path.join(__dirname, '..', 'dist', 'index.html'));
+  } else {
+    mainWindow.loadURL('http://localhost:5189');
+  }
 
   // Show only once the page is painted to avoid a white flash, then pull the
   // window to the foreground.
