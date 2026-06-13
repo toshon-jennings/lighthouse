@@ -1,20 +1,3 @@
-# Build artifacts
-target/
-src-tauri/target/
-
-# IDE
-.idea/
-.vscode/
-*.swp
-*.swo
-
-# OS
-.DS_Store
-Thumbs.db
-
-# Node (if npm/yarn used later)
-node_modules/
 dist/
-
-# Rust
-Cargo.lock.bak
+node_modules/
+*.log
