@@ -529,6 +529,19 @@ main {
   letter-spacing: 0;
 }
 
+.pm-link {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--amber-strong);
+  text-decoration: none;
+  margin-left: 8px;
+  vertical-align: middle;
+}
+
+.pm-link:hover {
+  text-decoration: underline;
+}
+
 .section-subtitle {
   margin-top: 5px;
   color: var(--text-muted);
