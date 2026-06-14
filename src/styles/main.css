@@ -390,18 +390,18 @@ main {
     linear-gradient(180deg, rgba(255, 95, 79, 0.1), rgba(255, 95, 79, 0.025)),
     var(--surface);
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.28);
-  overflow-x: auto;
-  overflow-y: hidden;
-  max-height: 52px;
+  overflow: hidden;
+  max-height: 56px;
   transition: max-height 0.2s ease;
 }
 
 .conflicts-banner.has-conflicts {
-  max-height: 120px;
+  max-height: 96px;
 }
 
 .conflicts-banner-inner {
   display: flex;
+  flex-direction: row;
   align-items: center;
   gap: 16px;
   padding: 12px 18px;
@@ -422,10 +422,16 @@ main {
 
 .conflicts-banner-list {
   display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
   align-items: center;
   gap: 10px;
-  flex-wrap: nowrap;
+  flex: 1;
   min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding-bottom: 7px;
+  overscroll-behavior-x: contain;
 }
 
 .conflicts-banner .conflict-chip {
@@ -478,17 +484,25 @@ main {
   background: rgba(255, 191, 69, 0.2);
 }
 
-.conflicts-banner::-webkit-scrollbar {
-  height: 3px;
+.conflicts-banner-list::-webkit-scrollbar {
+  height: 10px;
 }
 
-.conflicts-banner::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.conflicts-banner::-webkit-scrollbar-thumb {
-  background: rgba(255, 95, 79, 0.3);
+.conflicts-banner-list::-webkit-scrollbar-track {
+  background: rgba(255, 95, 79, 0.08);
   border-radius: 999px;
+}
+
+.conflicts-banner-list::-webkit-scrollbar-thumb {
+  background: rgba(255, 95, 79, 0.45);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+.conflicts-banner-list::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 95, 79, 0.65);
+  background-clip: padding-box;
 }
 
 .section-header {
@@ -903,6 +917,32 @@ code {
 .no-pid,
 .muted {
   color: var(--text-muted);
+}
+
+.warn-flag {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 5px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #f5b945;
+  background: rgba(245, 185, 69, 0.12);
+  border: 1px solid rgba(245, 185, 69, 0.3);
+  white-space: nowrap;
+}
+
+.proto-tag {
+  display: inline-block;
+  margin-left: 4px;
+  padding: 0 5px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  color: var(--text-muted);
+  background: rgba(255, 255, 255, 0.06);
+  vertical-align: middle;
 }
 
 .file-item {
@@ -1464,6 +1504,67 @@ code {
   font-family: var(--mono);
   font-size: 11px;
   line-height: 1.5;
+}
+
+/* Per-change opt-in checkbox + deployment-sync risk flags */
+.resolve-config-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+  cursor: pointer;
+}
+
+.resolve-config-check input[type="checkbox"] {
+  width: 15px;
+  height: 15px;
+  accent-color: var(--red);
+  flex-shrink: 0;
+}
+
+.resolve-config-item.risk-row {
+  background: rgba(245, 185, 69, 0.05);
+  border-left: 2px solid rgba(245, 185, 69, 0.5);
+  padding-left: 8px;
+}
+
+.risk-badge {
+  display: inline-block;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-family: var(--sans, inherit);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+.risk-badge.risk-high {
+  color: #f5b945;
+  background: rgba(245, 185, 69, 0.12);
+  border: 1px solid rgba(245, 185, 69, 0.4);
+}
+
+.risk-badge.risk-medium {
+  color: var(--text-muted);
+  background: rgba(135, 168, 185, 0.1);
+  border: 1px solid rgba(135, 168, 185, 0.2);
+}
+
+.resolve-sync-warning {
+  margin-bottom: 12px;
+  padding: 9px 12px;
+  border-radius: 7px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: #f5d49a;
+  background: rgba(245, 185, 69, 0.1);
+  border: 1px solid rgba(245, 185, 69, 0.3);
+}
+
+.summary-warn {
+  color: #f5b945;
+  font-weight: 600;
 }
 
 .resolve-danger {
