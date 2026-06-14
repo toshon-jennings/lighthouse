@@ -265,7 +265,7 @@
 
       <div class="resolve-section">
         <h3 class="resolve-section-title">Processes involved</h3>
-        <p class="resolve-hint">Select which process(es) to kill. You must kill at least one to free the port.</p>
+        <p class="resolve-hint">Select any process(es) you want to kill — or kill none and just apply the config changes below.</p>
         <div id="resolve-processes"></div>
       </div>
 
@@ -297,30 +297,143 @@ function execCmd(cmd, timeout = 10000) {
   try { return execSync(cmd, { timeout, encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] }); } catch { return ''; }
 }
 
-function parseLsof(output) {
-  const ports = [];
-  let currentPid = null, currentCmd = '', entries = [];
-  const flush = () => {
-    for (const [addr, portStr] of entries) {
-      const port = parseInt(portStr, 10);
+// Parse one IPv4/IPv6 host:port token from lsof's `n` field.
+// Handles `*:5000`, `127.0.0.1:3000`, and bracketed v6 `[::1]:631`.
+function parseHostPort(n) {
+  let host, portStr;
+  if (n[0] === '[') { const i = n.indexOf(']'); host = n.slice(1, i); portStr = n.slice(i + 2); }
+  else { const cp = n.lastIndexOf(':'); host = n.slice(0, cp); portStr = n.slice(cp + 1); }
+  return { host, port: parseInt(portStr, 10) };
+}
+
+// Normalize a wildcard/loopback bind address given the socket family.
+function normalizeBind(host, family) {
+  if (host === '*' || host === '') return family === 'IPv6' ? '::' : '0.0.0.0';
+  return host;
+}
+
+// Single lsof pass over TCP+UDP, IPv4+IPv6, all states. Returns { listeners, all }.
+//   listeners = TCP sockets in LISTEN + bound UDP sockets (no remote peer)
+//   all       = every record, including connections (TIME_WAIT/CLOSE_WAIT/...)
+// so `check_port` can tell "free" from "held by a lingering socket".
+function scanSockets() {
+  const output = execCmd('lsof -nP -iTCP -iUDP -F pcftPnT');
+  const all = [];
+  let pid = null, cmd = '';
+  let fam = null, proto = null, name = null, state = null;
+  const flushFile = () => {
+    if (name != null) {
+      const isConn = name.indexOf('->') >= 0;
+      const local = isConn ? name.split('->')[0] : name;
+      const { host, port } = parseHostPort(local);
       if (!isNaN(port) && port > 0 && port <= 65535) {
-        const bind = (addr === '*' || addr === '') ? '0.0.0.0' : addr;
-        ports.push({ port, protocol: 'TCP', bind_address: bind, pid: currentPid, process_name: currentCmd, service_name: null, managed_by: null, project: null, source: 'Live' });
+        all.push({
+          pid, process_name: cmd,
+          protocol: proto || 'TCP', family: fam || 'IPv4',
+          bind_address: normalizeBind(host, fam), port,
+          state: state || (proto === 'UDP' ? 'UDP' : null),
+          conn: isConn,
+        });
       }
     }
-    entries = [];
+    fam = proto = name = state = null;
   };
   for (const line of output.split('\n')) {
     if (!line) continue;
     const tag = line[0], val = line.slice(1);
-    if (tag === 'p') { flush(); currentPid = parseInt(val, 10) || null; currentCmd = ''; }
-    else if (tag === 'c') { currentCmd = val; }
-    else if (tag === 'n') { const cp = val.lastIndexOf(':'); if (cp >= 0) entries.push([val.slice(0, cp), val.slice(cp + 1)]); }
+    if (tag === 'p') { flushFile(); pid = parseInt(val, 10) || null; cmd = ''; }
+    else if (tag === 'c') { cmd = val; }
+    else if (tag === 'f') { flushFile(); }
+    else if (tag === 't') { fam = val; }
+    else if (tag === 'P') { proto = val; }
+    else if (tag === 'n') { name = val; }
+    else if (tag === 'T') { if (val.startsWith('ST=')) state = val.slice(3); }
   }
-  flush();
-  ports.sort((a, b) => a.port - b.port || a.bind_address.localeCompare(b.bind_address));
+  flushFile();
+  const listeners = all.filter(s => !s.conn && (s.protocol === 'UDP' || s.state === 'LISTEN'));
   const seen = new Set();
-  return ports.filter(p => { const k = `${p.port}-${p.bind_address}-${p.pid}`; if (seen.has(k)) return false; seen.add(k); return true; });
+  const deduped = listeners.filter(s => {
+    const k = `${s.port}-${s.protocol}-${s.bind_address}-${s.pid}`;
+    if (seen.has(k)) return false; seen.add(k); return true;
+  });
+  deduped.sort((a, b) => a.port - b.port || String(a.bind_address).localeCompare(String(b.bind_address)));
+  return { listeners: deduped, all };
+}
+
+// First free port in [start,end] that is neither bound live nor declared in a
+// PORTMASTER. Falls back to "not live" if every free port is already declared.
+function suggestFree(start, end, liveUsed, declaredUsed) {
+  for (let c = start; c <= end; c++) if (!liveUsed.has(c) && !declaredUsed.has(c)) return c;
+  for (let c = start; c <= end; c++) if (!liveUsed.has(c)) return c;
+  return null;
+}
+
+// Reconcile live listeners against PORTMASTER declarations. These are the
+// conflicts the guided resolve flow can actually act on.
+function detectConflicts(listeners, entries) {
+  const conflicts = [];
+  const liveUsed = new Set(listeners.map(l => l.port));
+  const declaredUsed = new Set(entries.map(e => e.port));
+  const norm = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  // Generic words that shouldn't count as an identity match (avoid wrongly
+  // suppressing a real conflict just because two names both say "server").
+  const STOP = new Set(['app', 'com', 'the', 'backend', 'desktop', 'server', 'agent', 'service', 'daemon', 'run', 'serve', 'dev', 'api', 'node', 'python', 'main']);
+  const tokens = (s) => String(s || '').toLowerCase().split(/[^a-z0-9]+/).filter(t => t.length >= 3 && !STOP.has(t));
+  const related = (a, b) => {
+    const na = norm(a), nb = norm(b);
+    if (na && nb && (na.includes(nb) || nb.includes(na))) return true;
+    const tb = new Set(tokens(b));
+    return tokens(a).some(t => tb.has(t));
+  };
+
+  // 1. Same port declared to two different owners across/within PORTMASTER files.
+  const byPort = {};
+  for (const e of entries) (byPort[e.port] = byPort[e.port] || []).push(e);
+  for (const portKey of Object.keys(byPort)) {
+    const group = byPort[portKey];
+    const owners = [...new Set(group.map(e => norm(e.managed_by) || norm(e.service)).filter(Boolean))];
+    if (owners.length > 1) {
+      const a = group[0];
+      const b = group.find(e => (norm(e.managed_by) || norm(e.service)) !== (norm(a.managed_by) || norm(a.service))) || group[1];
+      const liveDup = listeners.find(l => l.port === Number(portKey) && l.pid);
+      conflicts.push({
+        port: Number(portKey), kind: 'duplicate_declaration',
+        process_a: a.managed_by || a.service, pid_a: null,
+        process_b: b.managed_by || b.service, pid_b: null,
+        suggestion: suggestFree(3000, 3999, liveUsed, declaredUsed),
+        explanation: `Port ${portKey} is declared to two different owners ("${a.managed_by || a.service}" and "${b.managed_by || b.service}") across PORTMASTER.md files${liveDup ? `, and is currently held by "${friendlyProcessName(liveDup.process_name)}" (PID ${liveDup.pid})` : ''}.`,
+      });
+    }
+  }
+
+  // 2. Live listener whose owner doesn't match the PORTMASTER declaration.
+  for (const l of listeners) {
+    const decl = entries.find(e => e.port === l.port);
+    if (!decl) continue;
+    const declaredOwner = decl.managed_by || decl.service;
+    if (declaredOwner && !related(declaredOwner, l.process_name) && !related(declaredOwner, friendlyProcessName(l.process_name))) {
+      conflicts.push({
+        port: l.port, kind: 'owner_mismatch',
+        process_a: l.process_name, pid_a: l.pid,
+        process_b: declaredOwner, pid_b: null,
+        suggestion: suggestFree(3000, 3999, liveUsed, declaredUsed),
+        explanation: `Port ${l.port} is declared for "${declaredOwner}" but is actually held by "${friendlyProcessName(l.process_name)}" (PID ${l.pid}).`,
+      });
+    }
+  }
+
+  // Attach every distinct live process bound to each conflicting port, so the
+  // resolve UI can let the user choose which to kill (not a pre-picked one).
+  const procsByPort = {};
+  for (const l of listeners) {
+    if (!l.pid) continue;
+    const arr = (procsByPort[l.port] = procsByPort[l.port] || []);
+    if (!arr.some(p => p.pid === l.pid)) arr.push({ pid: l.pid, name: l.process_name });
+  }
+  for (const c of conflicts) c.processes = procsByPort[c.port] || [];
+
+  const seen = new Set();
+  return conflicts.filter(c => { const k = `${c.port}-${c.kind}`; if (seen.has(k)) return false; seen.add(k); return true; });
 }
 
 function loadPortmasters() {
@@ -352,28 +465,48 @@ function loadPortmasters() {
 const invoke = async (command, args = {}) => {
   switch (command) {
     case 'scan_ports': {
-      const output = execCmd('lsof -iTCP -sTCP:LISTEN -P -n -F pcRn');
-      const ports = parseLsof(output);
+      const { listeners } = scanSockets();
       const portmasterEntries = loadPortmasters();
-      for (const p of ports) {
+      const declared = new Set(portmasterEntries.map(e => e.port));
+      for (const p of listeners) {
         const pm = portmasterEntries.find(e => e.port === p.port);
         if (pm) { p.service_name = pm.service; p.managed_by = pm.managed_by; }
+        p.exposed = (p.bind_address === '0.0.0.0' || p.bind_address === '::');
+        p.undeclared = !declared.has(p.port);
+        p.source = 'Live';
       }
+      const conflicts = detectConflicts(listeners, portmasterEntries);
       const now = new Date();
       const last_scan = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
-      return { ports, conflicts: [], portmaster_entries: portmasterEntries, project_ports: [], last_scan, status: 'ok' };
+      return { ports: listeners, conflicts, portmaster_entries: portmasterEntries, project_ports: [], last_scan, status: conflicts.length > 0 ? 'warning' : 'ok' };
     }
     case 'check_port': {
       const port = args.port;
-      const output = execCmd('lsof -iTCP -sTCP:LISTEN -P -n -F pcRn');
-      const ports = parseLsof(output);
-      const entry = ports.find(p => p.port === port);
-      const used = new Set(ports.map(p => p.port));
-      let suggestion = null;
-      if (entry) { for (let c = port + 1; c <= 3999; c++) { if (!used.has(c)) { suggestion = c; break; } } }
-      return { port, in_use: !!entry, process: entry ? entry.process_name : null, pid: entry ? entry.pid : null, suggestion };
+      const { listeners, all } = scanSockets();
+      const entry = listeners.find(p => p.port === port);
+      const liveUsed = new Set(listeners.map(p => p.port));
+      const declared = new Set(loadPortmasters().map(e => e.port));
+      const suggestion = entry ? suggestFree(port + 1, 65535, liveUsed, declared) : null;
+      // Honest "free": a port held only by a lingering TCP socket (TIME_WAIT,
+      // CLOSE_WAIT, ...) is not LISTENing but also can't be re-bound yet.
+      const transient = !entry ? all.find(s => s.port === port && s.protocol === 'TCP' && s.state && s.state !== 'LISTEN') : null;
+      return {
+        port, in_use: !!entry,
+        process: entry ? entry.process_name : (transient ? transient.process_name : null),
+        pid: entry ? entry.pid : (transient ? transient.pid : null),
+        bind: entry ? entry.bind_address : null,
+        protocol: entry ? entry.protocol : null,
+        transient_state: transient ? transient.state : null,
+        suggestion,
+      };
     }
-    case 'suggest_port': return 3007;
+    case 'suggest_port': {
+      const start = args.rangeStart || 3000, end = args.rangeEnd || 3999;
+      const { listeners } = scanSockets();
+      const liveUsed = new Set(listeners.map(p => p.port));
+      const declared = new Set(loadPortmasters().map(e => e.port));
+      return suggestFree(start, end, liveUsed, declared) || start;
+    }
     case 'get_portmaster_files': return [...new Set(loadPortmasters().map(p => p.source_file))];
     case 'get_process_details': {
       const pid = args.pid;
@@ -390,9 +523,105 @@ const invoke = async (command, args = {}) => {
         command: execCmd(`ps -o command= -p ${pid}`).trim(),
       };
     }
-    case 'find_port_references': return [];
+    case 'find_port_references': {
+      const fs = require('fs'); const path = require('path');
+      const home = os.homedir();
+      const { oldPort, newPort } = args;
+      const refs = [];
+      const NAME_RE = /(^package\.json$|^\.env|^vite\.config\.|\.config\.(js|ts|cjs|mjs)$|^docker-compose.*\.ya?ml$|\.toml$|^PORTMASTER\.md$)/;
+      const detectRe = new RegExp(`(?<![0-9])${oldPort}(?![0-9])`);
+      const replaceRe = new RegExp(`(?<![0-9])${oldPort}(?![0-9])`, 'g'); // all occurrences on the line, not just the first
+      // Deployment-platform markers — deliberately NOT limited to Vercel/Supabase;
+      // there are always more alternatives. Any of these means the project deploys
+      // somewhere, so its env/config may be mirrored to a remote. Memoized per dir.
+      const PLATFORM_MARKERS = {
+        '.vercel/project.json': 'Vercel', 'vercel.json': 'Vercel',
+        'netlify.toml': 'Netlify', '.netlify/state.json': 'Netlify',
+        'fly.toml': 'Fly.io', 'railway.json': 'Railway', 'railway.toml': 'Railway',
+        'render.yaml': 'Render', 'render.yml': 'Render',
+        'wrangler.toml': 'Cloudflare', 'firebase.json': 'Firebase',
+        'Procfile': 'Heroku', 'app.json': 'Heroku', 'app.yaml': 'App Engine',
+        'serverless.yml': 'Serverless', 'serverless.yaml': 'Serverless',
+        'supabase/config.toml': 'Supabase', 'amplify': 'Amplify',
+      };
+      const platformCache = {};
+      const projectPlatforms = (fileDir) => {
+        if (platformCache[fileDir] !== undefined) return platformCache[fileDir];
+        const found = new Set();
+        let dir = fileDir;
+        for (let i = 0; i < 6 && dir && dir !== '/'; i++) {
+          for (const marker in PLATFORM_MARKERS) {
+            if (fs.existsSync(path.join(dir, marker))) found.add(PLATFORM_MARKERS[marker]);
+          }
+          if (dir === home) break;
+          dir = path.dirname(dir);
+        }
+        return (platformCache[fileDir] = [...found]);
+      };
+      // A value pointing somewhere remote or shaped like a credential — changing a
+      // port inside it can desync from whatever service holds the real value.
+      const REMOTE_VALUE_RE = /https?:\/\/(?!localhost|127\.0\.0\.1|0\.0\.0\.0)|[a-z0-9-]+\.[a-z]{2,}(:\d+)?\/|(_URL|_URI|_KEY|_TOKEN|_SECRET|_DSN|PASSWORD|CONNECTION_?STRING)\s*[=:]/i;
+      const scanFile = (full) => {
+        try {
+          const envFile = /^\.env/.test(path.basename(full));
+          const platforms = projectPlatforms(path.dirname(full));
+          const lines = fs.readFileSync(full, 'utf8').split('\n');
+          for (let i = 0; i < lines.length; i++) {
+            if (!detectRe.test(lines[i])) continue;
+            let risk = 'low', reason = '';
+            if (envFile) {
+              risk = 'high';
+              reason = platforms.length
+                ? `Env file in a ${platforms.join('/')}-linked project — the remote may hold this value too`
+                : 'Env file — values here are commonly synced to a deployment platform';
+            } else if (REMOTE_VALUE_RE.test(lines[i])) {
+              risk = 'high'; reason = 'Line carries a remote URL / credential — may be synced externally';
+            } else if (platforms.length) {
+              risk = 'medium'; reason = `In a ${platforms.join('/')}-linked project`;
+            }
+            refs.push({
+              file_path: full, line_number: i + 1,
+              old_line: lines[i], new_line: lines[i].replace(replaceRe, String(newPort)),
+              old_port: oldPort, new_port: newPort,
+              env_file: envFile, platforms, risk, reason,
+            });
+          }
+        } catch { /* skip */ }
+      };
+      // Skip build artifacts and the heavy, definitely-not-a-project macOS dirs;
+      // walk everything else under $HOME so repos directly under home (e.g.
+      // ~/lighthouse, ~/opal) are found, not just ~/projects-style roots.
+      const SKIP = new Set(['node_modules', '.git', 'dist', 'build', 'release', '.next', '.cache',
+        'Library', 'Applications', 'Downloads', 'Music', 'Movies', 'Pictures', 'Public']);
+      const walk = (dir, depth) => {
+        if (depth <= 0 || !fs.existsSync(dir)) return;
+        let items; try { items = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
+        for (const it of items) {
+          if (it.isDirectory()) { if (!SKIP.has(it.name) && !it.name.startsWith('.')) walk(path.join(dir, it.name), depth - 1); }
+          else if (NAME_RE.test(it.name)) scanFile(path.join(dir, it.name));
+        }
+      };
+      scanFile(path.join(home, '.config/agent-rules/PORTMASTER.md'));
+      walk(home, 4);
+      const seen = new Set();
+      const rank = { high: 0, medium: 1, low: 2 };
+      return refs
+        .filter(r => { const k = `${r.file_path}:${r.line_number}`; if (seen.has(k)) return false; seen.add(k); return true; })
+        .sort((a, b) => (rank[a.risk] - rank[b.risk]) || a.file_path.localeCompare(b.file_path))
+        .slice(0, 50);
+    }
     case 'kill_process': try { execCmd(`kill -9 ${args.pid}`); return `Killed ${args.pid}`; } catch(e) { return `Failed: ${e.message}`; }
-    case 'apply_fix': return null;
+    case 'apply_fix': {
+      const fs = require('fs');
+      const { filePath, lineNumber, newLine, oldLine } = args;
+      const lines = fs.readFileSync(filePath, 'utf8').split('\n');
+      const idx = lineNumber - 1;
+      if (idx < 0 || idx >= lines.length) throw new Error('Line out of range');
+      if (oldLine != null && lines[idx] !== oldLine) throw new Error('File changed since preview; skipped for safety');
+      lines[idx] = newLine;
+      fs.writeFileSync(filePath, lines.join('\n'));
+      return { ok: true };
+    }
     case 'open_config_file': try { require('child_process').execSync(`open '${args.filePath}'`); } catch { /* ignore */ } return null;
     default: return null;
   }
@@ -439,10 +668,16 @@ function friendlyProcessName(raw) {
   if (!raw) return '—';
   // Direct lookup
   if (PROCESS_NAME_MAP[raw]) return PROCESS_NAME_MAP[raw];
-  // Strip version suffixes like python3.12 → Python
+  // Strip version suffixes like python3.12 → Python. Done before the prefix
+  // recovery below so generic interpreters never get hijacked by a machine-
+  // specific truncated key (e.g. "python3.1" → some app).
   const base = raw.replace(/\d+(\.\d+)*$/, '').toLowerCase();
   if (base === 'python') return 'Python';
   if (base === 'node')   return 'Node.js';
+  // `lsof -F` reports full command names (e.g. "com.docker.backend"), but the
+  // map was built for lsof's legacy 9-char-truncated names ("com.docke"). Match
+  // on the 9-char prefix so the table still applies to truncated app names.
+  if (raw.length > 9 && PROCESS_NAME_MAP[raw.slice(0, 9)]) return PROCESS_NAME_MAP[raw.slice(0, 9)];
   // Fallback: prettify the raw name
   return raw
     .replace(/_/g, ' ')
@@ -514,6 +749,20 @@ document.addEventListener('keydown', (event) => {
     closeGuide();
   }
 });
+
+// Map vertical mouse-wheel to horizontal scroll on the conflicts strip
+// (wheel up → left, wheel down → right). Only intercept when it actually
+// overflows, so trackpad horizontal gestures and non-overflow cases pass through.
+(() => {
+  const list = document.getElementById('conflicts-list');
+  if (!list) return;
+  list.addEventListener('wheel', (event) => {
+    if (event.deltaY === 0) return;
+    if (list.scrollWidth <= list.clientWidth) return;
+    list.scrollLeft += event.deltaY;
+    event.preventDefault();
+  }, { passive: false });
+})();
 
 function normalizeValue(value) {
   if (value === null || value === undefined) return '';
@@ -627,9 +876,12 @@ function renderPorts(ports) {
 
   tbody.innerHTML = sorted.map(p => `
     <tr class="${String(p.source || '').toLowerCase()} ${isConflictPort(p.port) ? 'conflict' : ''}">
-      <td class="port-number">${p.port}</td>
-      <td><code>${p.bind_address || '-'}</code></td>
-      <td>${p.service_name || p.project || '-'}</td>
+      <td class="port-number">${p.port}${p.protocol && p.protocol !== 'TCP' ? ` <span class="proto-tag">${p.protocol}</span>` : ''}</td>
+      <td>
+        <code>${p.bind_address || '-'}</code>
+        ${p.exposed ? ' <span class="warn-flag" title="Bound to all interfaces (0.0.0.0 / ::). PORTMASTER policy prefers 127.0.0.1.">⚠ exposed</span>' : ''}
+      </td>
+      <td>${p.service_name || p.project || (p.undeclared ? '<span class="muted">undeclared</span>' : '-')}</td>
       <td>
         <span class="process-name-cell" title="${p.metadata_hint || ''}">${friendlyProcessName(p.process_name) || '-'}</span>
         ${p.pid ? `<button class="info-btn" onclick="togglePortDetail(${p.port}, '${p.bind_address.replace(/'/g, "\\'")}')" title="Show process details">ⓘ</button>` : ''}
@@ -868,8 +1120,23 @@ async function checkPort(port) {
     container.innerHTML = `
       <div class="check-result warn">
         <strong>Port ${result.port} is in use</strong>
-        ${result.process ? `<p>Process: ${result.process} (PID: ${result.pid})</p>` : ''}
+        ${result.process ? `<p>Process: ${friendlyProcessName(result.process)} (PID: ${result.pid})</p>` : ''}
+        ${result.bind ? `<p>Bind: <code>${result.bind}</code> · ${result.protocol || 'TCP'}</p>` : ''}
         ${result.suggestion ? `<p>Suggestion: Try port ${result.suggestion}</p>` : ''}
+      </div>
+    `;
+  } else if (result.transient_state) {
+    // Not LISTENing, but a lingering socket means it can't be re-bound yet.
+    showToast(
+      `Port ${result.port} is not free yet`,
+      `A socket is in ${result.transient_state}. Wait for it to clear before re-binding.`,
+      'warn'
+    );
+
+    container.innerHTML = `
+      <div class="check-result warn">
+        <strong>Port ${result.port} is not bound, but not free</strong>
+        <p>A TCP socket is lingering in <code>${result.transient_state}</code>${result.pid ? ` (PID: ${result.pid})` : ''}. Binding now may fail until it clears.</p>
       </div>
     `;
   } else {
@@ -1018,7 +1285,8 @@ async function applySelectedFixes() {
       await invoke('apply_fix', {
         filePath: fix.file_path,
         lineNumber: fix.line_number,
-        newPort: fix.new_port,
+        newLine: fix.new_line,
+        oldLine: fix.old_line,
       });
       applied++;
     } catch (err) {
@@ -1056,10 +1324,10 @@ async function openResolveModal(conflictIndex) {
   _resolveState = {
     conflict,
     conflictIndex,
-    killA: false,
-    killB: false,
-    processDetails: { a: null, b: null },
+    kills: {},          // { [pid]: boolean }
+    processDetails: {},  // { [pid]: details }
     configRefs: [],
+    refChecks: {},       // { [refIndex]: boolean }
   };
 
   const modal = document.getElementById('resolve-modal');
@@ -1075,32 +1343,31 @@ async function openResolveModal(conflictIndex) {
   subtitle.textContent = `Port ${conflict.port} — ${friendlyProcessName(conflict.process_a)} vs ${friendlyProcessName(conflict.process_b)}`;
   explanation.textContent = conflict.explanation || `Two processes are both trying to bind port ${conflict.port}.`;
 
-  // Build process selection cards
+  // Build one selectable card per live process bound to the port. The user
+  // chooses which to kill — nothing is pre-selected.
   processesDiv.innerHTML = '';
+  const procs = conflict.processes || [];
 
-  const buildProcessCard = (label, procName, pid, key) => {
-    const hasPid = !!pid;
-    const card = document.createElement('div');
-    card.className = 'resolve-process-card';
-    card.innerHTML = `
-      <label class="resolve-process-check">
-        <input type="checkbox" id="resolve-kill-${key}" ${!hasPid ? 'disabled' : ''} onchange="toggleResolveKill('${key}')">
-        <div class="resolve-process-info">
-          <span class="resolve-process-name">${friendlyProcessName(procName)}</span>
-          <span class="resolve-process-pid">${hasPid ? `PID ${pid}` : 'No PID available'}</span>
-        </div>
-      </label>
-      <div id="resolve-detail-${key}" class="resolve-process-detail hidden"></div>
-    `;
-    processesDiv.appendChild(card);
-
-    if (hasPid) {
-      loadProcessDetail(key, pid);
+  if (procs.length === 0) {
+    processesDiv.innerHTML = '<p class="resolve-hint">No live process is bound to this port. Resolve it via the config changes below.</p>';
+  } else {
+    for (const proc of procs) {
+      const card = document.createElement('div');
+      card.className = 'resolve-process-card';
+      card.innerHTML = `
+        <label class="resolve-process-check">
+          <input type="checkbox" id="resolve-kill-${proc.pid}" onchange="toggleResolveKill(${proc.pid})">
+          <div class="resolve-process-info">
+            <span class="resolve-process-name">${friendlyProcessName(proc.name)}</span>
+            <span class="resolve-process-pid">PID ${proc.pid}</span>
+          </div>
+        </label>
+        <div id="resolve-detail-${proc.pid}" class="resolve-process-detail hidden"></div>
+      `;
+      processesDiv.appendChild(card);
+      loadProcessDetail(proc.pid, proc.pid);
     }
-  };
-
-  buildProcessCard('A', conflict.process_a, conflict.pid_a, 'a');
-  buildProcessCard('B', conflict.process_b, conflict.pid_b, 'b');
+  }
 
   // Reset config section
   configList.innerHTML = '';
@@ -1126,11 +1393,30 @@ async function openResolveModal(conflictIndex) {
       if (refs.length === 0) {
         configEmpty.classList.remove('hidden');
       } else {
-        configList.innerHTML = refs.map((r, i) => {
+        // High-risk changes (env files / synced values / deployment-linked) are
+        // left UNCHECKED by default so they're a deliberate opt-in.
+        _resolveState.refChecks = {};
+        refs.forEach((r, i) => { _resolveState.refChecks[i] = r.risk !== 'high'; });
+        const highCount = refs.filter(r => r.risk === 'high').length;
+
+        const banner = highCount > 0
+          ? `<div class="resolve-sync-warning">⚠ ${highCount} change(s) touch env files or deployment-synced values. These are <strong>off by default</strong> — turn one on only if you'll also update the remote (Vercel, Supabase, etc.) to match.</div>`
+          : '';
+
+        configList.innerHTML = banner + refs.map((r, i) => {
           const shortPath = r.file_path.replace(/^\/Users\/[^\/]+\//, '~/');
+          const badge = r.risk === 'high'
+            ? `<span class="risk-badge risk-high" title="${escapeHtml(r.reason || '')}">⚠ ${r.platforms && r.platforms.length ? r.platforms.join('/') : (r.env_file ? 'env' : 'synced')}</span>`
+            : r.risk === 'medium'
+            ? `<span class="risk-badge risk-medium" title="${escapeHtml(r.reason || '')}">${r.platforms && r.platforms.length ? r.platforms.join('/') : 'deploy'}</span>`
+            : '';
           return `
-            <div class="resolve-config-item">
-              <div class="resolve-config-file">${shortPath}<span class="resolve-config-line">:${r.line_number}</span></div>
+            <div class="resolve-config-item ${r.risk === 'high' ? 'risk-row' : ''}">
+              <label class="resolve-config-check">
+                <input type="checkbox" id="resolve-ref-${i}" ${_resolveState.refChecks[i] ? 'checked' : ''} onchange="toggleResolveConfigRef(${i})">
+                <span class="resolve-config-file">${shortPath}<span class="resolve-config-line">:${r.line_number}</span></span>
+                ${badge}
+              </label>
               <div class="resolve-config-diff">
                 <div class="diff-old">- ${escapeHtml(r.old_line.trim())}</div>
                 <div class="diff-new">+ ${escapeHtml(r.new_line.trim())}</div>
@@ -1172,49 +1458,61 @@ async function loadProcessDetail(key, pid) {
   }
 }
 
-function toggleResolveKill(key) {
-  const cb = document.getElementById(`resolve-kill-${key}`);
+function toggleResolveKill(pid) {
+  const cb = document.getElementById(`resolve-kill-${pid}`);
   if (!cb || !_resolveState) return;
-  if (key === 'a') _resolveState.killA = cb.checked;
-  if (key === 'b') _resolveState.killB = cb.checked;
+  _resolveState.kills[pid] = cb.checked;
+  updateResolveSummary();
+}
+
+function toggleResolveConfigRef(i) {
+  const cb = document.getElementById(`resolve-ref-${i}`);
+  if (!cb || !_resolveState) return;
+  _resolveState.refChecks[i] = cb.checked;
   updateResolveSummary();
 }
 
 function updateResolveSummary() {
   if (!_resolveState) return;
-  const { conflict, killA, killB, configRefs } = _resolveState;
+  const { conflict, kills, configRefs, refChecks } = _resolveState;
   const summary = document.getElementById('resolve-summary');
   const confirmBtn = document.getElementById('resolve-confirm-btn');
+  const procs = conflict.processes || [];
+  const selected = procs.filter(p => kills[p.pid]);
+  const selectedRefs = configRefs.filter((r, i) => refChecks[i]);
+  const riskySelected = selectedRefs.filter(r => r.risk === 'high').length;
 
   const parts = [];
 
-  if (killA && killB) {
-    parts.push(`Kill <strong>${friendlyProcessName(conflict.process_a)}</strong> and <strong>${friendlyProcessName(conflict.process_b)}</strong> on port ${conflict.port}.`);
-  } else if (killA) {
-    parts.push(`Kill <strong>${friendlyProcessName(conflict.process_a)}</strong> on port ${conflict.port}. <strong>${friendlyProcessName(conflict.process_b)}</strong> will keep running.`);
-  } else if (killB) {
-    parts.push(`Kill <strong>${friendlyProcessName(conflict.process_b)}</strong> on port ${conflict.port}. <strong>${friendlyProcessName(conflict.process_a)}</strong> will keep running.`);
-  } else {
-    summary.textContent = 'Select at least one process to kill above.';
+  if (selected.length > 0) {
+    const names = selected.map(p => `<strong>${friendlyProcessName(p.name)}</strong> (PID ${p.pid})`);
+    parts.push(`Kill ${names.join(' and ')} on port ${conflict.port}.`);
+  }
+  if (selectedRefs.length > 0) {
+    parts.push(`Rewrite ${selectedRefs.length} of ${configRefs.length} config file(s) to port ${conflict.suggestion}.`);
+  }
+
+  if (selected.length === 0 && selectedRefs.length === 0) {
+    summary.textContent = configRefs.length
+      ? 'Nothing selected. Tick a process to kill and/or the config changes to apply.'
+      : (procs.length ? 'Select a process to kill above.' : 'No live process and no config references — nothing to apply.');
     confirmBtn.disabled = true;
-    confirmBtn.textContent = 'Select at least one process to kill';
+    confirmBtn.textContent = 'Nothing selected';
     return;
   }
 
-  if (conflict.suggestion && configRefs.length > 0) {
-    parts.push(`Update ${configRefs.length} config file(s) to use port ${conflict.suggestion}.`);
-  } else if (conflict.suggestion) {
-    parts.push(`Suggested new port: ${conflict.suggestion} (no config files to update).`);
+  if (riskySelected > 0) {
+    parts.push(`<span class="summary-warn">Includes ${riskySelected} deployment-synced change(s) — remember to update the remote.</span>`);
   }
 
   summary.innerHTML = parts.join(' ');
   confirmBtn.disabled = false;
-  confirmBtn.textContent = 'Confirm & Apply';
+  confirmBtn.textContent = riskySelected > 0 ? 'Confirm & Apply (incl. synced)' : 'Confirm & Apply';
 }
 
 async function confirmResolve() {
   if (!_resolveState) return;
-  const { conflict, killA, killB, configRefs } = _resolveState;
+  const { conflict, kills, configRefs, refChecks } = _resolveState;
   const confirmBtn = document.getElementById('resolve-confirm-btn');
   confirmBtn.disabled = true;
   confirmBtn.textContent = 'Applying…';
@@ -1222,30 +1520,26 @@ async function confirmResolve() {
   let killed = [];
   let errors = [];
 
-  if (killA && conflict.pid_a) {
+  for (const proc of (conflict.processes || [])) {
+    if (!kills[proc.pid]) continue;
     try {
-      await invoke('kill_process', { pid: conflict.pid_a });
-      killed.push(conflict.process_a);
+      await invoke('kill_process', { pid: proc.pid });
+      killed.push(friendlyProcessName(proc.name));
     } catch (err) {
-      errors.push(`Failed to kill ${conflict.process_a} (PID ${conflict.pid_a}): ${err}`);
-    }
-  }
-  if (killB && conflict.pid_b) {
-    try {
-      await invoke('kill_process', { pid: conflict.pid_b });
-      killed.push(conflict.process_b);
-    } catch (err) {
-      errors.push(`Failed to kill ${conflict.process_b} (PID ${conflict.pid_b}): ${err}`);
+      errors.push(`Failed to kill ${friendlyProcessName(proc.name)} (PID ${proc.pid}): ${err}`);
     }
   }
 
   let configApplied = 0;
-  for (const ref of configRefs) {
+  for (let i = 0; i < configRefs.length; i++) {
+    if (!refChecks[i]) continue;  // only apply the changes the user ticked
+    const ref = configRefs[i];
     try {
       await invoke('apply_fix', {
         filePath: ref.file_path,
         lineNumber: ref.line_number,
-        newPort: ref.new_port,
+        newLine: ref.new_line,
+        oldLine: ref.old_line,
       });
       configApplied++;
     } catch (err) {
