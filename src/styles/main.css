@@ -1131,6 +1131,21 @@ code {
   margin-top: 5px;
 }
 
+.guide-link {
+  margin-top: 8px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.guide-link a {
+  color: var(--amber-strong);
+  text-decoration: none;
+}
+
+.guide-link a:hover {
+  text-decoration: underline;
+}
+
 .process-details {
   flex-basis: 100%;
   margin-top: 4px;
