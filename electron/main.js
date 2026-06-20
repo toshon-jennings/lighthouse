@@ -1,6 +1,27 @@
 const { app, BrowserWindow } = require('electron');
 const path = require('path');
 
+// Enrich process.env.PATH with common CLI locations, especially on macOS
+if (process.platform === 'darwin' || process.platform === 'linux') {
+  const home = app.getPath('home');
+  const extraPaths = [
+    path.join(home, '.local', 'bin'),
+    path.join(home, 'bin'),
+    '/opt/homebrew/bin',
+    '/usr/local/bin',
+    '/usr/sbin',
+    '/sbin'
+  ];
+  const currentPath = process.env.PATH || '';
+  const pathParts = currentPath.split(path.delimiter);
+  for (const extra of extraPaths) {
+    if (!pathParts.includes(extra)) {
+      pathParts.push(extra);
+    }
+  }
+  process.env.PATH = pathParts.join(path.delimiter);
+}
+
 let mainWindow;
 
 function createWindow() {
