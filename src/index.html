@@ -264,6 +264,12 @@
         <p class="resolve-explanation" id="resolve-explanation"></p>
       </div>
 
+      <div class="resolve-section hidden" id="resolve-accept-section">
+        <h3 class="resolve-section-title">Or accept the current owner</h3>
+        <p class="resolve-hint" id="resolve-accept-hint"></p>
+        <button class="secondary-btn" id="resolve-accept-btn" onclick="acceptCurrentOwner()">Accept current owner</button>
+      </div>
+
       <div class="resolve-section">
         <h3 class="resolve-section-title">Processes involved</h3>
         <p class="resolve-hint">Select any process(es) you want to kill — or kill none and just apply the config changes below.</p>
@@ -417,6 +423,7 @@ function detectConflicts(listeners, entries) {
         port: l.port, kind: 'owner_mismatch',
         process_a: l.process_name, pid_a: l.pid,
         process_b: declaredOwner, pid_b: null,
+        decl_source_file: decl.source_file,
         suggestion: suggestFree(3000, 3999, liveUsed, declaredUsed),
         explanation: `Port ${l.port} is declared for "${declaredOwner}" but is actually held by "${friendlyProcessName(l.process_name)}" (PID ${l.pid}).`,
       });
@@ -425,13 +432,31 @@ function detectConflicts(listeners, entries) {
 
   // Attach every distinct live process bound to each conflicting port, so the
   // resolve UI can let the user choose which to kill (not a pre-picked one).
+  // Also include process_b if it is found running anywhere (by name match) so
+  // kills work in both directions — not just "kill the intruder on this port".
   const procsByPort = {};
   for (const l of listeners) {
     if (!l.pid) continue;
     const arr = (procsByPort[l.port] = procsByPort[l.port] || []);
-    if (!arr.some(p => p.pid === l.pid)) arr.push({ pid: l.pid, name: l.process_name });
+    if (!arr.some(p => p.pid === l.pid)) arr.push({ pid: l.pid, name: l.process_name, port: l.port });
   }
-  for (const c of conflicts) c.processes = procsByPort[c.port] || [];
+  const allLiveProcs = [];
+  for (const l of listeners) {
+    if (!l.pid) continue;
+    if (!allLiveProcs.some(p => p.pid === l.pid)) allLiveProcs.push({ pid: l.pid, name: l.process_name, port: l.port });
+  }
+  for (const c of conflicts) {
+    const procs = [...(procsByPort[c.port] || [])];
+    // Find process_b (the other party) anywhere in the listener list by name.
+    if (c.process_b) {
+      for (const lp of allLiveProcs) {
+        if (!procs.some(p => p.pid === lp.pid) && related(c.process_b, lp.name)) {
+          procs.push({ pid: lp.pid, name: lp.name, port: lp.port, secondary: true });
+        }
+      }
+    }
+    c.processes = procs;
+  }
 
   const seen = new Set();
   return conflicts.filter(c => { const k = `${c.port}-${c.kind}`; if (seen.has(k)) return false; seen.add(k); return true; });
@@ -448,7 +473,17 @@ function loadPortmasters() {
     if (maxDepth <= 0 || !fs.existsSync(dir)) return;
     try { for (const entry of fs.readdirSync(dir, { withFileTypes: true })) { const full = path.join(dir, entry.name); if (entry.isDirectory()) walk(full, maxDepth - 1); else if (entry.name === 'PORTMASTER.md') files.push(full); } } catch { /* skip */ }
   };
+  // Named dev-directory shortlist
   for (const d of ['projects', 'code', 'dev', 'workspace', 'src']) { walk(path.join(home, d), 4); }
+  // Also walk $HOME one level deep so repos sitting directly under ~ are found
+  // (catches layouts like ~/my-project/PORTMASTER.md).
+  try {
+    for (const entry of fs.readdirSync(home, { withFileTypes: true })) {
+      if (entry.isDirectory() && !entry.name.startsWith('.') && !['Library', 'Applications', 'node_modules'].includes(entry.name)) {
+        walk(path.join(home, entry.name), 3);
+      }
+    }
+  } catch { /* skip */ }
   const entries = [];
   for (const f of [...new Set(files)]) {
     try {
@@ -622,6 +657,28 @@ const invoke = async (command, args = {}) => {
       lines[idx] = newLine;
       fs.writeFileSync(filePath, lines.join('\n'));
       return { ok: true };
+    }
+    case 'accept_owner': {
+      // The inverse of moving/killing: ratify the live process by rewriting the
+      // PORTMASTER.md declaration's managed_by cell to match reality.
+      const fs = require('fs');
+      const { filePath, port, newOwner } = args;
+      if (!filePath || !newOwner) throw new Error('Missing PORTMASTER file or owner');
+      const rowRe = /\|\s*(\d+)\s*\|\s*([^|]+?)\s*\|\s*([^|]+?)\s*\|\s*([^|]+?)\s*\|\s*([^|]+?)\s*\|\s*([^|]+?)\s*\|/;
+      const lines = fs.readFileSync(filePath, 'utf8').split('\n');
+      for (let i = 0; i < lines.length; i++) {
+        const m = rowRe.exec(lines[i]);
+        if (!m || parseInt(m[1], 10) !== Number(port)) continue;
+        const cells = lines[i].split('|'); // managed_by is the 5th data cell -> index 5
+        const old = cells[5] || '';
+        const lead = (old.match(/^\s*/) || [''])[0];
+        const trail = (old.match(/\s*$/) || [''])[0] || ' ';
+        cells[5] = `${lead}${newOwner}${trail}`;
+        lines[i] = cells.join('|');
+        fs.writeFileSync(filePath, lines.join('\n'));
+        return { ok: true, file: filePath };
+      }
+      return { ok: false, error: `No PORTMASTER row for port ${port} in ${filePath}` };
     }
     case 'open_config_file': try { require('child_process').execSync(`open '${args.filePath}'`); } catch { /* ignore */ } return null;
     default: return null;
@@ -1344,6 +1401,17 @@ async function openResolveModal(conflictIndex) {
   subtitle.textContent = `Port ${conflict.port} — ${friendlyProcessName(conflict.process_a)} vs ${friendlyProcessName(conflict.process_b)}`;
   explanation.textContent = conflict.explanation || `Two processes are both trying to bind port ${conflict.port}.`;
 
+  // Offer the inverse resolution — ratify the live process instead of moving or
+  // killing it — only when the declaration is what's wrong (owner_mismatch).
+  const acceptSection = document.getElementById('resolve-accept-section');
+  if (conflict.kind === 'owner_mismatch' && conflict.decl_source_file) {
+    document.getElementById('resolve-accept-hint').textContent =
+      `Keep ${friendlyProcessName(conflict.process_a)} on port ${conflict.port} and update PORTMASTER.md (currently declares "${conflict.process_b}") to match. No process is killed and no config is moved.`;
+    acceptSection.classList.remove('hidden');
+  } else {
+    acceptSection.classList.add('hidden');
+  }
+
   // Build one selectable card per live process bound to the port. The user
   // chooses which to kill — nothing is pre-selected.
   processesDiv.innerHTML = '';
@@ -1355,11 +1423,14 @@ async function openResolveModal(conflictIndex) {
     for (const proc of procs) {
       const card = document.createElement('div');
       card.className = 'resolve-process-card';
+      // proc.secondary = found by name-match on a different port (the other conflict party)
+      const portNote = proc.secondary && proc.port && proc.port !== conflict.port
+        ? ` <span class="resolve-process-port-note">(on port ${proc.port})</span>` : '';
       card.innerHTML = `
         <label class="resolve-process-check">
           <input type="checkbox" id="resolve-kill-${proc.pid}" onchange="toggleResolveKill(${proc.pid})">
           <div class="resolve-process-info">
-            <span class="resolve-process-name">${friendlyProcessName(proc.name)}</span>
+            <span class="resolve-process-name">${friendlyProcessName(proc.name)}${portNote}</span>
             <span class="resolve-process-pid">PID ${proc.pid}</span>
           </div>
         </label>
@@ -1560,6 +1631,28 @@ async function confirmResolve() {
   }
 
   scan();
+}
+
+async function acceptCurrentOwner() {
+  const c = _resolveState && _resolveState.conflict;
+  if (!c) return;
+  const btn = document.getElementById('resolve-accept-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Updating PORTMASTER…'; }
+  const newOwner = friendlyProcessName(c.process_a);
+  try {
+    const res = await invoke('accept_owner', { filePath: c.decl_source_file, port: c.port, newOwner });
+    if (res && res.ok) {
+      closeResolveModal();
+      showToast('Owner accepted', `PORTMASTER now lists "${newOwner}" as owner of port ${c.port}.`, 'success');
+      scan();
+    } else {
+      if (btn) { btn.disabled = false; btn.textContent = 'Accept current owner'; }
+      showToast('Could not update PORTMASTER', (res && res.error) || 'Unknown error', 'warn');
+    }
+  } catch (err) {
+    if (btn) { btn.disabled = false; btn.textContent = 'Accept current owner'; }
+    showToast('Could not update PORTMASTER', String(err), 'warn');
+  }
 }
 
 function closeResolveModal() {
