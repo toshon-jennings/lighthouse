@@ -76,7 +76,8 @@ alias for the same thing.
 - PORTMASTER.md is read from `~/.config/agent-rules/PORTMASTER.md` and walked directories
 
 ## Known Issues
-- None currently.
+- `related()` token-matching suppresses conflicts when the live process name shares tokens with the declared owner (e.g. both contain 'node' or 'vite'). These are in the STOP word list, so common generics are excluded, but edge cases can still arise.
+- Bidirectional kill works only when process_b is actually running on some port. If it is not yet started there is nothing to show.
 - Possible follow-up: extract the shared engine into one module instead of
   duplicating it across `lighthouse/` and `opal/` (deferred -- separate apps,
   cross-repo packaging not worth it yet).
