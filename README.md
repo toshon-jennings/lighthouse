@@ -18,7 +18,7 @@ Features:
 ### CLI
 
 ```bash
-npm install -g @toshon/lighthouse
+npm install -g @toshon-jennings/lighthouse
 lh list               # list live ports
 lh check 3000         # check if a port is free
 lh suggest            # suggest a free port

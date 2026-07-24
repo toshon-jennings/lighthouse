@@ -1,6 +1,6 @@
 {
-  "name": "@toshon/lighthouse",
-  "version": "0.3.1",
+  "name": "@toshon-jennings/lighthouse",
+  "version": "0.3.2",
   "main": "electron/main.js",
   "bin": {
     "lh": "bin/lh.js"
@@ -11,6 +11,9 @@
     "start": "npm run electron",
     "build": "vite build",
     "dist": "npm run build && electron-builder --mac dmg"
+  },
+  "dependencies": {
+    "commander": "^5.1.0"
   },
   "devDependencies": {
     "concurrently": "^9.0.0",
