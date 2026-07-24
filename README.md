@@ -1,8 +1,9 @@
 # Lighthouse
 
-Lighthouse is a port-awareness tool for local development. It's a desktop app
-(Electron + Vite) that shows you what's listening on your machine, who owns each
-port, and where conflicts are.
+Lighthouse is a port-awareness tool for local development. It shows you what's
+listening on your machine, who owns each port, and where conflicts are.
+
+Ships as both an **Electron desktop app** and a **CLI** (`lh`).
 
 Features:
 - Scans live listening ports via `lsof`
@@ -13,6 +14,20 @@ Features:
 - Conflict detection with a guided resolve flow
 
 ## Install
+
+### CLI
+
+```bash
+npm install -g @toshon/lighthouse
+lh list               # list live ports
+lh check 3000         # check if a port is free
+lh suggest            # suggest a free port
+lh portmasters        # list PORTMASTER.md files
+```
+
+All commands support `--json` for machine-readable output.
+
+### Desktop App
 
 Grab the latest `.dmg` from the
 [Releases](https://github.com/toshon-jennings/lighthouse/releases) page (Apple
@@ -37,6 +52,8 @@ npm run electron   # starts Vite + Electron together
 The renderer has direct Node.js access (`nodeIntegration`), so port scanning,
 `PORTMASTER.md` parsing, and process lookups run in-process via `child_process`
 — there's no separate backend or IPC bridge.
+
+Core logic lives in `lib/engine.js` and is shared by both the CLI and desktop app.
 
 ## Building a release
 

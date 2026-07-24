@@ -1,8 +1,10 @@
 {
-  "name": "lighthouse",
-  "version": "0.3.0",
-  "private": true,
+  "name": "@toshon/lighthouse",
+  "version": "0.3.1",
   "main": "electron/main.js",
+  "bin": {
+    "lh": "bin/lh.js"
+  },
   "scripts": {
     "dev": "vite --port 5189 --strictPort",
     "electron": "concurrently -k -s first \"npm:dev\" \"wait-on http://localhost:5189 && NODE_ENV=development electron .\"",

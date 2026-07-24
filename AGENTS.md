@@ -6,35 +6,38 @@
 ## Project Context
 
 Lighthouse is a port-awareness tool for local development — scans live ports,
-detects conflicts, reads PORTMASTER.md files, and suggests fixes. It is a Tauri
-desktop app with a CLI companion (`lh`).
+detects conflicts, reads PORTMASTER.md files, and suggests fixes. It ships as
+both an Electron desktop app and a CLI (`lh`).
 
 - **Local path:** `/Users/toshonjennings/lighthouse`
 - **Repo:** `github.com/toshon-jennings/lighthouse`
-- **Core stack:** Rust (Tauri v2), HTML/CSS/JS frontend
-- **Cross-platform:** macOS / Linux / Windows
+- **Core stack:** Electron + Vite (desktop), Node.js + Commander (CLI)
+- **Cross-platform:** macOS (primary), Linux (planned)
 
 ## Architecture
 
-### Key Modules
-| Module | Purpose |
-|--------|---------|
-| `scanner` | Live port scanning via lsof/ss/netstat |
-| `portmaster` | PORTMASTER.md parsing |
-| `projects` | Config file scanning |
-| `resolver` | Conflict detection + port suggestion |
-| `config_editor` | Fix preview/apply |
-| `monitor` | 5s background polling |
+### Engine (`lib/engine.js`)
+Shared logic used by both the Electron app and CLI:
+| Function | Purpose |
+|----------|---------|
+| `scanSockets()` | Live port scanning via lsof (TCP + UDP, IPv4 + IPv6) |
+| `loadPortmasters()` | PORTMASTER.md parsing and walking |
+| `detectConflicts()` | Conflict detection between live and declared ports |
+| `suggestFree()` | Free port suggestion |
+| `friendlyProcessName()` | Human-readable process names |
 
-### CLI Commands
+### CLI (`bin/lh.js`)
 - `lh list` — list live ports
 - `lh check <port>` — check if a port is free
-- `lh suggest <port> <range>` — suggest alternative port
+- `lh suggest` — suggest a free port (option: `-r 3000:3999`)
 - `lh portmasters` — list PORTMASTER.md files
-- `lh projects` — list project configs
 
-### Known Bug
-- `resolver.rs` line ~80: `pp.port == pp.port` is always true (should be `pp.port == lp.port`). Causes false-positive conflict reports.
+All commands support `--json` for machine-readable output.
+
+### Desktop App
+- `electron/main.js` — Electron main process
+- `src/index.html` — UI (all JS inline, uses engine via `require()`)
+- `vite.config.ts` — dev server on port 5189
 
 ## Design Gate
 
