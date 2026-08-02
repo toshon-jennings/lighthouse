@@ -11,3 +11,6 @@ HITL.md
 
 # Personal agent working docs — local to the maintainer, not part of the package
 DECISIONS.md
+
+# Local agent settings — never publish
+.claude/
