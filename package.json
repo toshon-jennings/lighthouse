@@ -1,6 +1,6 @@
 {
   "name": "@toshon-jennings/lighthouse",
-  "version": "0.3.5",
+  "version": "0.3.7",
   "main": "electron/main.js",
   "bin": {
     "lh": "bin/lh.js"
@@ -19,7 +19,7 @@
     "electron": "concurrently -k -s first \"npm:dev\" \"wait-on http://localhost:5189 && NODE_ENV=development electron .\"",
     "start": "npm run electron",
     "build": "vite build",
-    "dist": "npm run build && electron-builder --mac dmg"
+    "dist": "npm run build && electron-builder --mac dmg && $HOME/.config/agent-rules/bin/fix-dmg-background.sh release/Lighthouse-$npm_package_version.dmg"
   },
   "dependencies": {
     "commander": "^5.1.0"
@@ -47,6 +47,28 @@
       "category": "public.app-category.developer-tools",
       "icon": "build/icon.png",
       "identity": null
+    },
+    "dmg": {
+      "artifactName": "${productName}-${version}.${ext}",
+      "background": "build/background.png",
+      "window": {
+        "width": 540,
+        "height": 380
+      },
+      "iconSize": 100,
+      "contents": [
+        {
+          "x": 140,
+          "y": 225,
+          "type": "file"
+        },
+        {
+          "x": 400,
+          "y": 225,
+          "type": "link",
+          "path": "/Applications"
+        }
+      ]
     }
   }
 }
