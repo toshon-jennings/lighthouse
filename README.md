@@ -5,6 +5,19 @@ listening on your machine, who owns each port, and where conflicts are.
 
 Ships as both an **Electron desktop app** and a **CLI** (`lh`).
 
+## What this isn't
+
+- **Not a firewall or a process manager.** Lighthouse reports; it doesn't block traffic,
+  and killing a process is something you do yourself after it tells you what's there.
+- **Not a daemon.** There's no background service holding a live view. Each run shells
+  out to `lsof` and reads the `PORTMASTER.md` files it finds, so what you see is a
+  snapshot from the moment you asked.
+- **Not a source of truth on its own.** Ownership labels come from `PORTMASTER.md`
+  files you maintain. A port with no declared owner shows up as whatever the process
+  table says, which is often just a runtime name.
+- **Not cross-platform yet.** It depends on `lsof` and is developed and tested on macOS.
+  Cross-platform is a design goal, not a current property.
+
 Features:
 - Scans live listening ports via `lsof`
 - Detects `PORTMASTER.md` files across your machine and annotates ports with
